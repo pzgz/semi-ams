@@ -1,6 +1,8 @@
 #include "settings.h"
 
 #include <LittleFS.h>
+#include <ctype.h>
+#include <stdio.h>
 
 Settings gSettings;
 
@@ -17,6 +19,7 @@ static const SettingDef kDefs[] = {
     {"feed_timeout_s", "打印中补料超时", "s", 3, 600},
     {"unload_timeout_s", "退料超时", "s", 5, 900},
     {"unload_extra_ms", "退料离开就绪开关后多退", "ms", 0, 10000},
+    {"tail_feed_ms", "耗材用尽后送出料尾最长", "ms", 0, 30000},
 };
 
 const SettingDef* settingDefs(size_t& count) {
@@ -42,6 +45,7 @@ long settingsGet(const char* key) {
   if (!strcmp(key, "feed_timeout_s")) return p.feedTimeoutMs / 1000;
   if (!strcmp(key, "unload_timeout_s")) return p.unloadTimeoutMs / 1000;
   if (!strcmp(key, "unload_extra_ms")) return p.unloadExtraMs;
+  if (!strcmp(key, "tail_feed_ms")) return p.tailFeedMs;
   return -1;
 }
 
@@ -59,12 +63,59 @@ bool settingsSet(const char* key, long v) {
   else if (!strcmp(key, "feed_timeout_s")) p.feedTimeoutMs = v * 1000UL;
   else if (!strcmp(key, "unload_timeout_s")) p.unloadTimeoutMs = v * 1000UL;
   else if (!strcmp(key, "unload_extra_ms")) p.unloadExtraMs = v;
+  else if (!strcmp(key, "tail_feed_ms")) p.tailFeedMs = v;
   else return false;
   return true;
 }
 
 void settingsSetBlinkerKey(const char* key) {
   strlcpy(gSettings.blinkerKey, key ? key : "", sizeof(gSettings.blinkerKey));
+}
+
+static bool alnum(const char* v, size_t minLen, size_t maxLen) {
+  const size_t n = v ? strlen(v) : 0;
+  if (n < minLen || n > maxLen) return false;
+  for (size_t i = 0; i < n; i++)
+    if (!isalnum((unsigned char)v[i])) return false;
+  return true;
+}
+
+bool settingsSetMqttIp(const char* v) {
+  if (!v || !*v) {
+    gSettings.mqttIp[0] = 0;
+    return true;
+  }
+  int a, b, c, d;
+  char tail;
+  if (sscanf(v, "%d.%d.%d.%d%c", &a, &b, &c, &d, &tail) != 4) return false;
+  if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) return false;
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%d.%d.%d.%d", a, b, c, d);
+  strlcpy(gSettings.mqttIp, buf, sizeof(gSettings.mqttIp));
+  return true;
+}
+
+bool settingsSetMqttSn(const char* v) {
+  if (v && *v && !alnum(v, 8, 20)) return false;
+  strlcpy(gSettings.mqttSn, v ? v : "", sizeof(gSettings.mqttSn));
+  for (char* p = gSettings.mqttSn; *p; p++) *p = toupper((unsigned char)*p);  // 序列号是大写
+  return true;
+}
+
+bool settingsSetMqttCode(const char* v) {
+  if (v && *v && !alnum(v, 6, 16)) return false;
+  strlcpy(gSettings.mqttCode, v ? v : "", sizeof(gSettings.mqttCode));
+  return true;
+}
+
+bool settingsSetMqttUnloadWait(long s) {
+  if (s < 0 || s > 600) return false;
+  gSettings.mqttUnloadWaitS = (uint16_t)s;
+  return true;
+}
+
+bool settingsMqttConfigured() {
+  return gSettings.mqttIp[0] && gSettings.mqttSn[0] && gSettings.mqttCode[0];
 }
 
 bool settingsBegin() {
@@ -85,6 +136,11 @@ bool settingsBegin() {
     k.trim();
     v.trim();
     if (k == "blinker_key") settingsSetBlinkerKey(v.c_str());
+    else if (k == "mqtt_enable") gSettings.mqttEnable = v.toInt() != 0;
+    else if (k == "mqtt_ip") settingsSetMqttIp(v.c_str());
+    else if (k == "mqtt_sn") settingsSetMqttSn(v.c_str());
+    else if (k == "mqtt_code") settingsSetMqttCode(v.c_str());
+    else if (k == "mqtt_unload_wait_s") settingsSetMqttUnloadWait(v.toInt());
     else settingsSet(k.c_str(), v.toInt());
   }
   f.close();
@@ -101,6 +157,9 @@ bool settingsSave() {
   }
   f.print("blinker_key=");
   f.println(gSettings.blinkerKey);
+  f.printf("mqtt_enable=%d\nmqtt_ip=%s\nmqtt_sn=%s\nmqtt_code=%s\nmqtt_unload_wait_s=%u\n",
+           gSettings.mqttEnable ? 1 : 0, gSettings.mqttIp, gSettings.mqttSn, gSettings.mqttCode,
+           (unsigned)gSettings.mqttUnloadWaitS);
   f.close();
   return true;
 }

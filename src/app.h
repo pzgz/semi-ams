@@ -10,6 +10,10 @@ namespace app {
 void requestStartStop(const char* source);
 void requestEmergency(const char* source);
 void requestRestart(const char* reason);
+// 拓竹打印机（MQTT）事件：开始打印（外置料盘）/ 打印机已退料
+void requestPrinterStart(const char* reason);
+void requestPrinterUnload(const char* reason);
+bool motorStopped();  // 电机完全停止（不在运转也不在刹车）
 // 手动点动（只在空闲时允许），用于确认电机方向和速度
 bool requestJog(semi::MotorDir dir, uint8_t speed, uint32_t ms);
 // 参数修改后应用到状态机和电机
@@ -21,6 +25,10 @@ struct Status {
   semi::MotorDir motor;  // 实际电机方向（含点动）
   uint8_t duty;
   bool in, ready, lack, full;
+  bool btnStart, btnEmg;          // 按键消抖后的状态：true = 按下
+  bool rawGpio0, rawGpio15;       // 按键引脚当前电平（黑键 GPIO0 按下为低，红键 GPIO15 按下为高）
+  uint32_t tickGapMs;             // 最近 10~20 秒内 10ms 周期的最大间隔
+  uint32_t tickLate;              // 周期被推迟（>= TICK_LATE_MS）的累计次数
   uint32_t rev;  // 状态有变化时改变
 };
 Status status();

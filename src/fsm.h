@@ -32,6 +32,9 @@ struct Inputs {
 struct Commands {
   bool startStop = false;  // 黑色按钮：开始 / 结束打印
   bool emergency = false;  // 红色按钮：紧急停止 / 解除
+  // 拓竹打印机（MQTT）事件。和黑色按钮不同，它们不是"切换"，重复收到也不会来回切换：
+  bool printerStart = false;   // 打印机用外置料盘开始打印：确保进入"打印中"（需要时先吸料）
+  bool printerUnload = false;  // 打印机已退料：打印中则开始退料
 };
 
 struct Params {
@@ -43,7 +46,10 @@ struct Params {
   uint32_t firstFeedTimeoutMs = 120000;  // 开始打印后第一次送料（要走完整条 PTFE 管）超时
   uint32_t feedTimeoutMs = 30000;      // 打印中每次补料超时
   uint32_t unloadTimeoutMs = 90000;    // 退料超时
-  uint32_t unloadExtraMs = 300;        // 退料时耗材离开就绪开关后再多退的时间
+  uint32_t unloadExtraMs = 0;          // 退料时耗材离开就绪开关后再多退的时间（多退会退出齿轮，下次吸不进去）
+  // 打印中料尾离开进料口开关后，继续送料直到料尾过了就绪开关（就绪开关在齿轮出口之后，过了它料尾就离开了齿轮）。
+  // 这是电机实际送料时间的上限：就绪开关没触发、失效或料尾卡住时，送够这么久也停。0 = 进料口一空就停
+  uint32_t tailFeedMs = 5000;
 };
 
 struct MotorCmd {
@@ -117,6 +123,10 @@ class Fsm {
   bool outOfMaterial_ = false;
   bool refillTiming_ = false;  // 打印中耗材用尽后又插入新耗材，等插入延时
   uint32_t refillSince_ = 0;
+  bool tailDone_ = false;       // 耗材用尽后的料尾送料已结束
+  bool tailReadySeen_ = false;  // 料尾送料期间就绪开关有料（之后松开 = 料尾已离开齿轮）
+  uint32_t tailUsedMs_ = 0;     // 料尾送料已用的电机时间
+  uint32_t prevNow_ = 0;        // 上一次 update 的时间，用来累计电机运行时间
 
   // Unloading
   bool readySeen_ = false;  // 本次退料中就绪开关有过耗材；从没有过时（开关失效）一直退到离开进料口

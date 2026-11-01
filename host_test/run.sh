@@ -4,5 +4,5 @@
 set -e
 cd "$(dirname "$0")"
 OUT="$(mktemp -d)/fsm_test"
-c++ -std=c++17 -Wall -Wextra -I../src -o "$OUT" test_main.cpp ../src/fsm.cpp
+c++ -std=c++17 -Wall -Wextra -I../src -o "$OUT" test_main.cpp ../src/fsm.cpp ../src/bambu.cpp
 "$OUT" "$@"

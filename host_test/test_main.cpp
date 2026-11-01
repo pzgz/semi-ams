@@ -1,4 +1,5 @@
-// 在电脑上运行的仿真测试：g++ -std=c++17 -I../src test_main.cpp ../src/fsm.cpp && ./a.out
+// 在电脑上运行的仿真测试：bash host_test/run.sh（等同于 c++ -std=c++17 -I../src test_main.cpp ../src/fsm.cpp ../src/bambu.cpp）
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -212,8 +213,10 @@ static void test_feed_timeout_and_resume() {
 }
 
 static void test_unload() {
-  title("结束打印 -> 退到就绪开关松开再多退一点 -> 已退料（耗材留在进料口）");
+  title("结束打印 -> 退到就绪开关松开（再多退 unload_extra_ms）-> 已退料（耗材留在进料口）");
   Sim s(Inputs{true, true, false, true});
+  s.p.unloadExtraMs = 300;  // 用非零值测试"多退"的计时
+  s.fsm.setParams(s.p);
   s.press(true);
   s.run(100);
   s.press(true);
@@ -237,20 +240,99 @@ static void test_unload() {
 }
 
 static void test_unload_cancel_and_timeout() {
-  title("退料中按黑色按钮取消；退料超时");
-  Sim s(Inputs{true, true, false, true});
+  title("退料中再按黑色按钮：取消退料、回到打印中送料；退料超时");
+  Sim s(Inputs{true, true, false, false});
   s.press(true);
+  s.run(20);
+  CHECK(s.st() == State::Printing);
+  CHECK(s.m() == MotorDir::Forward);
   s.press(true);
   CHECK(s.st() == State::Unloading);
+  CHECK(s.m() == MotorDir::Reverse);
   s.press(true);
-  CHECK(s.st() == State::Ready);
-  CHECK(s.m() == MotorDir::Stop);
-  s.press(true);
+  s.run(20);
+  CHECK(s.st() == State::Printing);   // 不是停住，而是继续送料
+  CHECK(s.m() == MotorDir::Forward);
+  s.in.full = true;
+  s.run(20);
+  CHECK(s.m() == MotorDir::Stop);     // 送到满就停
   s.press(true);
   CHECK(s.st() == State::Unloading);
   s.run(s.p.unloadTimeoutMs + 50);
   CHECK(s.st() == State::Emergency);
   CHECK(std::strcmp(s.fsm.note(), "退料超时") == 0);
+}
+
+static void test_unload_default_stops_at_ready_release() {
+  title("默认参数：就绪开关一松开（消抖后）就停，不多退");
+  Sim s(Inputs{true, true, false, true});
+  s.press(true);
+  s.press(true);
+  CHECK(s.st() == State::Unloading);
+  s.in.ready = false;
+  s.in.full = false;
+  s.run(20);
+  CHECK(s.st() == State::Retracted);
+  CHECK(s.m() == MotorDir::Stop);
+}
+
+static void test_inlet_empty_stops_feeding() {
+  title("打印中料尾离开进料口：继续送料，料尾过了就绪开关（离开齿轮）才停");
+  Sim s(Inputs{true, true, true, false});
+  s.press(true);
+  s.run(50);
+  CHECK(s.m() == MotorDir::Forward);
+  s.in.in = false;  // 料尾过了进料口，还夹在齿轮里，就绪开关还压着
+  s.run(10);
+  CHECK(std::strcmp(s.fsm.note(), "耗材已用尽") == 0);
+  CHECK(s.m() == MotorDir::Forward);  // 继续送
+  s.run(1000);
+  CHECK(s.m() == MotorDir::Forward);
+  s.in.ready = false;  // 料尾过了就绪开关 = 已离开齿轮
+  s.run(10);
+  CHECK(s.m() == MotorDir::Stop);
+  s.in.full = false;
+  s.in.lack = true;
+  s.run(5000);
+  CHECK(s.m() == MotorDir::Stop);  // 之后不再补料
+  CHECK(s.st() == State::Printing);
+  s.press(true);
+  CHECK(s.st() == State::NoMaterial);
+}
+
+static void test_tail_feed_pauses_at_full_and_has_limit() {
+  title("料尾送料：缓冲器满了先暂停，空了再送；就绪开关一直不松开时送够 tail_feed_ms 就停");
+  Sim s(Inputs{true, true, true, false});
+  s.press(true);
+  s.run(50);
+  s.in.in = false;
+  s.run(1000);
+  CHECK(s.m() == MotorDir::Forward);
+  s.in.lack = false;
+  s.in.full = true;  // 缓冲器满了
+  s.run(20);
+  CHECK(s.m() == MotorDir::Stop);
+  s.run(20000);  // 暂停期间不计时
+  CHECK(s.m() == MotorDir::Stop);
+  s.in.full = false;
+  s.in.lack = true;  // 打印机用掉了，缓冲器空
+  s.run(20);
+  CHECK(s.m() == MotorDir::Forward);
+  s.run(s.p.tailFeedMs - 1000 - 200);
+  CHECK(s.m() == MotorDir::Forward);  // 累计还没到上限
+  s.run(400);
+  CHECK(s.m() == MotorDir::Stop);     // 料尾卡住 / 就绪开关不松开：到上限停止
+  s.run(5000);
+  CHECK(s.m() == MotorDir::Stop);
+
+  Sim z(Inputs{true, true, true, false});
+  z.p.tailFeedMs = 0;  // 设为 0：进料口一空就停
+  z.fsm.setParams(z.p);
+  z.press(true);
+  z.run(50);
+  z.in.in = false;
+  z.run(20);
+  CHECK(z.m() == MotorDir::Stop);
 }
 
 static void test_out_of_material_while_printing() {
@@ -262,6 +344,8 @@ static void test_out_of_material_while_printing() {
   s.in.full = false;
   s.in.lack = true;
   s.run(100);
+  CHECK(s.m() == MotorDir::Forward);  // 就绪开关没有料：按时间上限送出料尾
+  s.run(s.p.tailFeedMs + 100);
   CHECK(s.st() == State::Printing);
   CHECK(s.m() == MotorDir::Stop);
   CHECK(std::strcmp(s.fsm.note(), "耗材已用尽") == 0);
@@ -274,7 +358,7 @@ static void test_refill_while_printing() {
   Sim s(Inputs{true, true, false, true});
   s.press(true);
   s.in = Inputs{false, false, true, false};
-  s.run(100);
+  s.run(s.p.tailFeedMs + 100);
   CHECK(s.m() == MotorDir::Stop);
   s.in.in = true;  // 插入新耗材
   s.run(300);
@@ -415,7 +499,7 @@ static void test_debouncer() {
 
 static void test_buttons() {
   title("按键短按 / 长按");
-  ButtonTracker black(3, false, 3000);
+  ButtonTracker black(2, 5, false, 3000);
   black.reset(false);
   uint32_t t = 0;
   auto feed = [&](ButtonTracker& b, bool p, uint32_t ms, int& shorts, int& longs) {
@@ -437,7 +521,7 @@ static void test_buttons() {
   feed(black, false, 100, sh, lo);
   CHECK(sh == 0 && lo == 1);  // 长按不触发开始/结束
 
-  ButtonTracker red(3, true, 3000);
+  ButtonTracker red(2, 5, true, 3000);
   red.reset(false);
   sh = lo = 0;
   feed(red, true, 50, sh, lo);
@@ -445,12 +529,50 @@ static void test_buttons() {
   feed(red, false, 50, sh, lo);
   CHECK(sh == 1 && lo == 0);
 
-  ButtonTracker held(3, true, 3000);
+  ButtonTracker held(2, 5, true, 3000);
   held.reset(true);  // 上电时按着
   sh = lo = 0;
   feed(held, true, 5000, sh, lo);
   feed(held, false, 100, sh, lo);
   CHECK(sh == 0 && lo == 0);
+
+  title("按键：快速点按 20ms 能识别；10ms 毛刺不识别但会报告；按住时接触不良不会触发两次");
+  {
+    ButtonTracker b(2, 5, false, 3000);
+    b.reset(false);
+    uint32_t tt = 0;
+    int shorts = 0, blips = 0;
+    auto step = [&](bool p) {
+      auto r = b.update(p, tt += 10);
+      shorts += r.shortPress;
+      blips += r.blip;
+    };
+    // 20ms 快速点按
+    step(true); step(true);
+    for (int i = 0; i < 6; i++) step(false);
+    CHECK(shorts == 1);
+    CHECK(blips == 0);
+    // 10ms 毛刺
+    shorts = 0;
+    step(true);
+    for (int i = 0; i < 6; i++) step(false);
+    CHECK(shorts == 0);
+    CHECK(blips == 1);
+    // 按住 300ms，中间多次 10~40ms 的接触不良
+    shorts = blips = 0;
+    const bool pattern[] = {1,1,1,0,1,1,0,0,1,1,1,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1};
+    for (bool p : pattern) step(p);
+    CHECK(shorts == 0);         // 还按着，没触发
+    for (int i = 0; i < 6; i++) step(false);
+    CHECK(shorts == 1);         // 松开后只触发一次
+
+    ButtonTracker r(2, 5, true, 3000);
+    r.reset(false);
+    int rs = 0;
+    for (bool p : pattern) rs += r.update(p, tt += 10).shortPress;
+    for (int i = 0; i < 6; i++) rs += r.update(false, tt += 10).shortPress;
+    CHECK(rs == 1);             // 红色按钮同样只触发一次
+  }
 }
 
 static void test_motor_logic() {
@@ -493,6 +615,8 @@ static void test_motor_logic() {
   CHECK(r.output().in2.level == PinLevel::High && r.output().in1.level == PinLevel::Pwm);
 }
 
+#include "test_printer.inc"
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1 && std::strcmp(argv[1], "-v") == 0;
   test_auto_load();
@@ -505,6 +629,9 @@ int main(int argc, char** argv) {
   test_feed_timeout_and_resume();
   test_unload();
   test_unload_cancel_and_timeout();
+  test_unload_default_stops_at_ready_release();
+  test_inlet_empty_stops_feeding();
+  test_tail_feed_pauses_at_full_and_has_limit();
   test_out_of_material_while_printing();
   test_refill_while_printing();
   test_retracted_reload_and_print();
@@ -517,6 +644,16 @@ int main(int argc, char** argv) {
   test_debouncer();
   test_buttons();
   test_motor_logic();
+  test_json_scanner();
+  test_mqtt_codec();
+  test_bambu_print_start();
+  test_bambu_state_fallback();
+  test_bambu_unload();
+  test_bambu_hw_switch_fallback();
+  test_fsm_printer_commands();
+  test_bambu_new_protocol();
+  test_bambu_change_filament_variants();
+  test_mqtt_reader_edge();
   std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }

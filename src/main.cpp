@@ -17,6 +17,7 @@
 #include "input.h"
 #include "motor_logic.h"
 #include "net.h"
+#include "printer.h"
 #include "settings.h"
 
 using semi::MotorDir;
@@ -29,12 +30,14 @@ semi::MotorLogic gMotor;
 
 semi::Debouncer gIn(SWITCH_DEBOUNCE), gReady(SWITCH_DEBOUNCE);
 semi::Debouncer gLack(HALL_DEBOUNCE), gFull(HALL_DEBOUNCE);
-semi::ButtonTracker gBtnStart(BUTTON_DEBOUNCE, false, LONG_PRESS_MS);     // 松开触发
-semi::ButtonTracker gBtnEmergency(BUTTON_DEBOUNCE, true, LONG_PRESS_MS);  // 按下立即触发
+semi::ButtonTracker gBtnStart(BUTTON_PRESS_SAMPLES, BUTTON_RELEASE_SAMPLES, false, LONG_PRESS_MS);     // 松开触发
+semi::ButtonTracker gBtnEmergency(BUTTON_PRESS_SAMPLES, BUTTON_RELEASE_SAMPLES, true, LONG_PRESS_MS);  // 按下立即触发
 
 // 远程命令（loop 里设置，tick 里消费；ESP8266 是协作式调度，不会同时执行）
 volatile bool gReqStartStop = false;
 volatile bool gReqEmergency = false;
+volatile bool gReqPrinterStart = false;
+volatile bool gReqPrinterUnload = false;
 const char* volatile gRestartReason = nullptr;
 volatile bool gHaltMotor = false;
 
@@ -47,6 +50,22 @@ volatile bool gInvertValue = false;
 volatile bool gOtaStopped = false;
 
 volatile app::NetLed gNetLed = app::NetLed::Slow;
+
+// 黑色按钮的下降沿锁存：触点接触不稳时，每次接通可能只有零点几毫秒（C23 被瞬间放电，
+// 再经上拉在 1ms 内充回高电平），10ms 一次的采样大多会错过。中断记下"这 10ms 里接通过"，
+// tick 把它当成这一次采样为按下；是否算一次按键仍由 ButtonTracker 的连续次数决定。
+volatile bool gStartLowLatch = false;
+volatile uint32_t gStartFalls = 0;  // 下降沿累计次数（诊断：按住期间触点断开又接通了几次）
+
+void IRAM_ATTR onStartFall() {
+  gStartLowLatch = true;
+  gStartFalls = gStartFalls + 1;
+}
+
+// 诊断：10ms 周期是否被推迟（loop 里的网络操作长时间不让出 CPU 时会发生，按键可能因此漏检）
+volatile uint32_t gTickGapMax = 0;      // 最近 10~20 秒内两次 tick 的最大间隔（ms）
+volatile uint32_t gTickGapWin = 0;      // 当前 10 秒窗口内的最大间隔
+volatile uint32_t gTickLateCount = 0;   // 间隔 >= TICK_LATE_MS 的累计次数
 volatile uint32_t gUiRev = 0;
 uint32_t gLastFsmRev = 0;
 MotorDir gLastMotorDir = MotorDir::Stop;
@@ -112,6 +131,27 @@ semi::Inputs currentInputs() {
 void tick() {
   const uint32_t now = millis();
 
+  {
+    static uint32_t lastTickAt = 0, winStart = 0, lastLateLog = 0;
+    if (lastTickAt) {
+      const uint32_t gap = now - lastTickAt;
+      if (gap > gTickGapWin) gTickGapWin = gap;
+      if (gap >= TICK_LATE_MS) {
+        gTickLateCount = gTickLateCount + 1;
+        if (!lastLateLog || now - lastLateLog > 2000) {
+          lastLateLog = now | 1;
+          app::log("定时任务被推迟 %lums（累计 %lu 次）", (unsigned long)gap, (unsigned long)gTickLateCount);
+        }
+      }
+    }
+    lastTickAt = now;
+    if (now - winStart >= 10000) {
+      gTickGapMax = gTickGapWin;
+      gTickGapWin = 0;
+      winStart = now;
+    }
+  }
+
   bool changed = false;
   changed |= gIn.update(digitalRead(PIN_SW_IN) == LOW);
   changed |= gReady.update(digitalRead(PIN_SW_READY) == LOW);
@@ -123,8 +163,32 @@ void tick() {
   }
 
   semi::Commands cmd;
-  auto rs = gBtnStart.update(digitalRead(PIN_BTN_START) == LOW, now);
+  noInterrupts();
+  const bool startLatched = gStartLowLatch;
+  gStartLowLatch = false;
+  interrupts();
+  auto rs = gBtnStart.update(startLatched || digitalRead(PIN_BTN_START) == LOW, now);
   auto re = gBtnEmergency.update(digitalRead(PIN_BTN_EMERGENCY) == HIGH, now);
+  // 诊断：记录按键的每一次按下 / 松开
+  static bool prevStart = false, prevEmg = false;
+  static uint32_t startPressAt = 0, startFallsAtPress = 0;
+  if (gBtnStart.pressed() != prevStart) {
+    prevStart = gBtnStart.pressed();
+    if (prevStart) {
+      startPressAt = now;
+      startFallsAtPress = gStartFalls;
+      app::log("黑色按钮按下");
+    } else {
+      app::log("黑色按钮松开（按住 %lums，期间触点断开又接通 %lu 次）", (unsigned long)(now - startPressAt),
+               (unsigned long)(gStartFalls - startFallsAtPress));
+    }
+  }
+  if (gBtnEmergency.pressed() != prevEmg) {
+    prevEmg = gBtnEmergency.pressed();
+    app::log("红色按钮%s", prevEmg ? "按下" : "松开");
+  }
+  if (rs.blip) app::log("黑色按钮信号太短（不到 20ms），未识别");
+  if (re.blip) app::log("红色按钮信号太短（不到 20ms），未识别");
   if (rs.shortPress) {
     cmd.startStop = true;
     app::log("黑色按钮：开始/结束");
@@ -142,6 +206,14 @@ void tick() {
   if (gReqEmergency) {
     gReqEmergency = false;
     cmd.emergency = true;
+  }
+  if (gReqPrinterStart) {
+    gReqPrinterStart = false;
+    cmd.printerStart = true;
+  }
+  if (gReqPrinterUnload) {
+    gReqPrinterUnload = false;
+    cmd.printerUnload = true;
   }
 
   // 固件升级（网页或 OTA）时停止电机
@@ -206,8 +278,56 @@ void printHelp() {
       "  jog f|r <速度%> <毫秒>  空闲时点动电机，确认方向和速度，如 jog f 50 2000\n"
       "  set <参数> <值>        修改参数并保存，如 set feed_speed 55\n"
       "  key <点灯密钥>         设置点灯密钥（重启生效）\n"
+      "  mqtt                   查看拓竹打印机连接状态\n"
+      "  mqtt on|off            开启/关闭拓竹打印机 MQTT\n"
+      "  mqtt ip|sn|code <值>   设置打印机 IP / 序列号 / 访问码\n"
+      "  mqtt wait <秒>         打印机退料后最多等多久再退料（0–600）\n"
       "  restart                重启\n"
       "  wifireset              清除 WiFi 和点灯密钥并重启"));
+}
+
+void printMqtt() {
+  Serial.printf("拓竹打印机：%s  启用:%s  IP:%s  序列号:%s  访问码:%s  退料等待:%us\n",
+                printer::statusText().c_str(), gSettings.mqttEnable ? "是" : "否",
+                gSettings.mqttIp[0] ? gSettings.mqttIp : "-", gSettings.mqttSn[0] ? gSettings.mqttSn : "-",
+                gSettings.mqttCode[0] ? "已设置" : "-", (unsigned)gSettings.mqttUnloadWaitS);
+  Serial.printf("  打印机：%s  最近事件：%s\n", printer::printerText().c_str(), printer::lastEvent());
+}
+
+void handleMqttCmd(String rest) {
+  int sp = rest.indexOf(' ');
+  String sub = sp < 0 ? rest : rest.substring(0, sp);
+  String val = sp < 0 ? String() : rest.substring(sp + 1);
+  sub.toLowerCase();
+  val.trim();
+  bool ok = true, changed = true;
+  if (!sub.length()) {
+    changed = false;
+  } else if (sub == "on" || sub == "off") {
+    printer::setEnabled(sub == "on");
+    changed = false;  // setEnabled 已保存
+  } else if (sub == "ip") {
+    ok = settingsSetMqttIp(val.c_str());
+  } else if (sub == "sn") {
+    ok = settingsSetMqttSn(val.c_str());
+  } else if (sub == "code") {
+    ok = settingsSetMqttCode(val.c_str());
+  } else if (sub == "wait") {
+    ok = settingsSetMqttUnloadWait(val.toInt());
+  } else {
+    Serial.println(F("用法：mqtt [on|off|ip <IP>|sn <序列号>|code <访问码>|wait <秒>]"));
+    return;
+  }
+  if (!ok) {
+    Serial.println(F("格式不对：IP 如 192.168.1.50；序列号 8–20 位字母数字；访问码 6–16 位字母数字；wait 0–600"));
+    return;
+  }
+  if (changed) {
+    settingsSave();
+    printer::applySettings();
+    Serial.println(F("已保存"));
+  }
+  printMqtt();
 }
 
 void printStatus() {
@@ -215,6 +335,10 @@ void printStatus() {
   Serial.printf("状态：%s  电机：%s %u%%\n", app::stateText().c_str(), semi::Fsm::motorName(s.motor),
                 s.duty);
   Serial.printf("进料口:%d 就绪:%d EMPTY:%d FULL:%d\n", s.in, s.ready, s.lack, s.full);
+  Serial.printf("黑色按钮:%s（GPIO0=%s）  红色按钮:%s（GPIO15=%s）\n", s.btnStart ? "按下" : "松开",
+                s.rawGpio0 ? "高" : "低", s.btnEmg ? "按下" : "松开", s.rawGpio15 ? "高" : "低");
+  Serial.printf("定时任务：最近最大间隔 %lums，被推迟（>=%dms）累计 %lu 次\n", (unsigned long)s.tickGapMs,
+                TICK_LATE_MS, (unsigned long)s.tickLate);
   Serial.printf("运行：%s  WiFi：%s %s  点灯：%s\n", app::uptimeText().c_str(),
                 net::connected() ? "已连接" : "未连接", net::ip().c_str(), cloud::statusText());
   size_t n;
@@ -223,6 +347,7 @@ void printStatus() {
     Serial.printf("  %-22s = %ld %s  (%s)\n", defs[i].key, settingsGet(defs[i].key), defs[i].unit,
                   defs[i].label);
   Serial.printf("  blinker_key            = %s\n", gSettings.blinkerKey[0] ? "（已设置）" : "（未设置）");
+  printMqtt();
 }
 
 void handleSerialLine(String line) {
@@ -244,6 +369,8 @@ void handleSerialLine(String line) {
     app::requestEmergency("串口");
   } else if (cmd == "restart") {
     app::requestRestart("串口命令");
+  } else if (cmd == "mqtt") {
+    handleMqttCmd(rest);
   } else if (cmd == "wifireset") {
     net::resetAll();
   } else if (cmd == "key") {
@@ -315,6 +442,20 @@ void requestEmergency(const char* source) {
   gReqEmergency = true;
 }
 
+void requestPrinterStart(const char* reason) {
+  log("%s", reason);
+  gReqPrinterUnload = false;
+  gReqPrinterStart = true;
+}
+
+void requestPrinterUnload(const char* reason) {
+  log("%s", reason);
+  gReqPrinterStart = false;
+  gReqPrinterUnload = true;
+}
+
+bool motorStopped() { return gMotor.dir() == MotorDir::Stop && !gMotor.braking(); }
+
 void requestRestart(const char* reason) {
   if (!gRestartReason) gRestartReason = reason;
 }
@@ -347,6 +488,12 @@ Status status() {
   s.ready = gReady.value();
   s.lack = gLack.value();
   s.full = gFull.value();
+  s.btnStart = gBtnStart.pressed();
+  s.btnEmg = gBtnEmergency.pressed();
+  s.rawGpio0 = digitalRead(PIN_BTN_START) == HIGH;
+  s.rawGpio15 = digitalRead(PIN_BTN_EMERGENCY) == HIGH;
+  s.tickGapMs = gTickGapMax > gTickGapWin ? gTickGapMax : gTickGapWin;
+  s.tickLate = gTickLateCount;
   s.rev = gUiRev;
   return s;
 }
@@ -377,8 +524,19 @@ void log(const char* fmt, ...) {
   e.sec = (uint32_t)(uptimeMs() / 1000ULL);
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(e.msg, sizeof(e.msg), fmt, ap);
+  const int n = vsnprintf(e.msg, sizeof(e.msg), fmt, ap);
   va_end(ap);
+  if (n >= (int)sizeof(e.msg)) {
+    // 被截断时不要留下半个汉字：找到最后一个字符的起始字节，字节数不够就去掉它
+    const size_t len = strlen(e.msg);
+    size_t start = len;
+    while (start && ((uint8_t)e.msg[start - 1] & 0xC0) == 0x80) start--;
+    if (start) {
+      const uint8_t lead = (uint8_t)e.msg[start - 1];
+      const size_t need = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
+      if (len - (start - 1) < need) e.msg[start - 1] = 0;
+    }
+  }
   gLogHead++;
 }
 
@@ -438,6 +596,7 @@ void setup() {
   gLack.reset(digitalRead(PIN_HALL_EMPTY) == LOW);
   gFull.reset(digitalRead(PIN_HALL_FULL) == LOW);
   gBtnStart.reset(digitalRead(PIN_BTN_START) == LOW);
+  attachInterrupt(digitalPinToInterrupt(PIN_BTN_START), onStartFall, FALLING);
   gBtnEmergency.reset(digitalRead(PIN_BTN_EMERGENCY) == HIGH);
   app::log("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(), gLack.value(),
            gFull.value());
@@ -447,11 +606,13 @@ void setup() {
   gTicker.attach_ms(TICK_MS, tick);
   flushLogs();
 
+  printer::begin();
   net::begin();
 }
 
 void loop() {
   net::loop();
+  printer::loop();
   pollSerial();
   flushLogs();
 

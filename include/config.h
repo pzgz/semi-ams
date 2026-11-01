@@ -3,7 +3,7 @@
 #pragma once
 
 #define FW_NAME    "SEMI-AMS"
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 // ---------------- 引脚 ----------------
 #define PIN_HALL_EMPTY    12  // U11 EMPTY_CHECK（DRV5032FA 推挽），低电平 = 缓冲器空
@@ -30,7 +30,9 @@
 #define TICK_MS               10    // 传感器采样 + 状态机周期
 #define HALL_DEBOUNCE          2    // 霍尔：连续 2 次（20ms）一致
 #define SWITCH_DEBOUNCE        5    // 微动开关：50ms
-#define BUTTON_DEBOUNCE        4    // 按键：40ms
+#define BUTTON_PRESS_SAMPLES   2    // 按键按下：连续 2 次（20ms）确认
+#define BUTTON_RELEASE_SAMPLES 5    // 按键松开：连续 5 次（50ms）确认，按住时的短暂接触不良不算松开
+#define TICK_LATE_MS          40    // 10ms 周期被推迟超过这个值就记一次（诊断用）
 #define LONG_PRESS_MS       3000    // 长按任意键松开后重启
 #define AUTO_RESTART_DAYS      7    // 运行满 7 天，空闲时自动重启
 #define UI_PUSH_INTERVAL_MS 1500    // App 刷新最小间隔（点灯限制设备 1 秒最多发 1 条）

@@ -10,6 +10,7 @@
 #include "app.h"
 #include "cloud.h"
 #include "config.h"
+#include "printer.h"
 #include "settings.h"
 
 namespace {
@@ -64,6 +65,9 @@ pre{font-size:12px;background:#111;color:#ddd;padding:10px;border-radius:8px;whi
 <span>就绪开关</span><span id="ready"></span>
 <span>EMPTY 霍尔</span><span id="lack"></span>
 <span>FULL 霍尔</span><span id="full"></span>
+<span>黑色按钮</span><span id="bs"></span>
+<span>红色按钮</span><span id="be"></span>
+<span>定时任务</span><span id="tk"></span>
 <span>运行时长</span><span id="up">-</span>
 <span>WiFi</span><span id="wifi">-</span>
 <span>点灯</span><span id="cloud">-</span>
@@ -75,7 +79,21 @@ pre{font-size:12px;background:#111;color:#ddd;padding:10px;border-radius:8px;whi
 <button onclick="cmd('jogr')">反转 2 秒</button>
 <button class="gray" onclick="if(confirm('确定重启？'))cmd('restart')">重启</button>
 </div><p id="msg" style="font-size:13px;color:#888;margin:8px 0 0">点动只在"无耗材 / 耗材就绪 / 已退料"状态下可用，用来确认电机方向和速度</p></div>
-<div class="card"><h2>参数</h2><form method="post" action="/api/settings">
+)HTML";
+
+const char PARAM_HEAD[] PROGMEM = R"HTML(<div class="card"><h2>参数</h2><form method="post" action="/api/settings">
+)HTML";
+
+const char MQTT_HEAD[] PROGMEM = R"HTML(<div class="card"><h2>拓竹打印机（MQTT）</h2><div class="grid">
+<span>连接</span><span class="v" id="mq">-</span>
+<span>打印机</span><span id="mp">-</span>
+<span>最近事件</span><span id="me">-</span>
+</div><form method="post" action="/api/mqtt" style="margin-top:10px">
+)HTML";
+
+const char MQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form>
+<p style="font-size:13px;color:#888;margin:8px 0 0">打印机用外置料盘开始打印时自动送料；在打印机上退料时自动退料。
+打印机和本设备要在同一个局域网，打印机可以保持连接拓竹云。IP、序列号、访问码在打印机屏幕的设置里能看到（局域网 / 设备信息）。</p></div>
 )HTML";
 
 const char PAGE_TAIL[] PROGMEM = R"HTML(
@@ -86,10 +104,14 @@ const char PAGE_TAIL[] PROGMEM = R"HTML(
 <button class="red" onclick="if(confirm('清除 WiFi 和点灯密钥并重启？重启后连接 SEMI-AMS 热点重新配网'))fetch('/api/reset',{method:'POST'})">重置配网</button>
 </div></div></main><script>
 function dot(v){return '<span class="dot'+(v?' on':'')+'"></span>'+(v?'有效':'无')}
+function btn(p,pin,lv){return '<span class="dot'+(p?' on':'')+'"></span>'+(p?'按下':'松开')+' <span style="color:#888">（'+pin+' '+(lv?'高':'低')+'）</span>'}
 function cmd(c){fetch('/api/cmd?c='+c,{method:'POST'}).then(r=>r.json()).then(j=>{document.getElementById('msg').textContent=j.msg})}
 function upd(){fetch('/api/status').then(r=>r.json()).then(s=>{
-for(const k of ['state','motor','up','wifi','cloud','ver'])document.getElementById(k).textContent=s[k];
+for(const k of ['state','motor','up','wifi','cloud','ver','mq','mp','me'])document.getElementById(k).textContent=s[k];
 for(const k of ['in','ready','lack','full'])document.getElementById(k).innerHTML=dot(s[k]);
+document.getElementById('bs').innerHTML=btn(s.bs,'GPIO0',s.g0);
+document.getElementById('be').innerHTML=btn(s.be,'GPIO15',s.g15);
+document.getElementById('tk').textContent='最大间隔 '+s.tg+'ms，被推迟 '+s.tl+' 次';
 const l=document.getElementById('log');l.textContent=s.log.join('\n');l.scrollTop=l.scrollHeight;}).catch(()=>{})}
 upd();setInterval(upd,1500);
 </script></body></html>)HTML";
@@ -134,8 +156,27 @@ void handleRoot() {
   form += gSettings.blinkerKey[0] ? F("已设置，留空不修改") : F("未设置");
   form += F("\"></label>\n");
 
+  String mq;
+  mq += F("<label>启用<input type=\"checkbox\" name=\"enable\" value=\"1\" style=\"width:auto\"");
+  if (gSettings.mqttEnable) mq += F(" checked");
+  mq += F("></label><input type=\"hidden\" name=\"has_enable\" value=\"1\">\n");
+  mq += F("<label>打印机 IP<input class=\"wide\" name=\"ip\" placeholder=\"192.168.1.50\" value=\"");
+  mq += gSettings.mqttIp;
+  mq += F("\"></label>\n<label>序列号<input class=\"wide\" name=\"sn\" pattern=\"[A-Za-z0-9]{8,20}\" value=\"");
+  mq += gSettings.mqttSn;
+  mq += F("\"></label>\n<label>访问码（配对码）<input class=\"wide\" name=\"code\" type=\"password\" "
+          "pattern=\"[A-Za-z0-9]{6,16}\" placeholder=\"");
+  mq += gSettings.mqttCode[0] ? F("已设置，留空不修改") : F("8 位");
+  mq += F("\"></label>\n<label>打印机退料后最多等（秒）<input type=\"number\" name=\"wait\" min=\"0\" max=\"600\" value=\"");
+  mq += gSettings.mqttUnloadWaitS;
+  mq += F("\"></label>\n");
+
   server.chunkedResponseModeStart(200, "text/html; charset=utf-8");
   server.sendContent_P(PAGE_HEAD);
+  server.sendContent_P(MQTT_HEAD);
+  server.sendContent(mq);
+  server.sendContent_P(MQTT_TAIL);
+  server.sendContent_P(PARAM_HEAD);
   server.sendContent(form);
   server.sendContent_P(PAGE_TAIL);
   server.chunkedResponseFinalize();
@@ -162,6 +203,18 @@ void handleStatus() {
   j += s.lack ? 1 : 0;
   j += F(",\"full\":");
   j += s.full ? 1 : 0;
+  j += F(",\"bs\":");
+  j += s.btnStart ? 1 : 0;
+  j += F(",\"be\":");
+  j += s.btnEmg ? 1 : 0;
+  j += F(",\"g0\":");
+  j += s.rawGpio0 ? 1 : 0;
+  j += F(",\"g15\":");
+  j += s.rawGpio15 ? 1 : 0;
+  j += F(",\"tg\":");
+  j += s.tickGapMs;
+  j += F(",\"tl\":");
+  j += s.tickLate;
   j += F(",\"up\":\"");
   j += app::uptimeText();
   j += F("\",\"wifi\":\"");
@@ -172,6 +225,12 @@ void handleStatus() {
   j += WiFi.localIP().toString();
   j += F("\",\"cloud\":\"");
   j += cloud::statusText();
+  j += F("\",\"mq\":\"");
+  j += jsonEscape(printer::statusText());
+  j += F("\",\"mp\":\"");
+  j += jsonEscape(printer::printerText());
+  j += F("\",\"me\":\"");
+  j += jsonEscape(printer::lastEvent());
   j += F("\",\"log\":[");
   // 分块发送，避免每 1.5 秒拼一个几 KB 的大字符串造成堆碎片
   server.chunkedResponseModeStart(200, "application/json; charset=utf-8");
@@ -239,6 +298,26 @@ void handleSettings() {
   server.send(303);
 }
 
+void handleMqtt() {
+  bool bad = false;
+  String ip = server.arg("ip"), sn = server.arg("sn"), code = server.arg("code"), wait = server.arg("wait");
+  ip.trim();
+  sn.trim();
+  code.trim();
+  wait.trim();
+  if (!settingsSetMqttIp(ip.c_str())) bad = true;
+  if (!settingsSetMqttSn(sn.c_str())) bad = true;
+  if (code.length() && !settingsSetMqttCode(code.c_str())) bad = true;  // 留空不修改
+  if (wait.length() && !settingsSetMqttUnloadWait(wait.toInt())) bad = true;
+  if (server.hasArg("has_enable")) gSettings.mqttEnable = server.arg("enable") == "1";
+  settingsSave();
+  printer::applySettings();
+  app::log("网页：拓竹打印机设置已保存（%s）%s", gSettings.mqttEnable ? "已启用" : "未启用",
+           bad ? "，有格式不对的项未修改" : "");
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
 void handleReset() {
   server.send(200, "text/plain; charset=utf-8", "已清除，正在重启");
   net::resetAll();
@@ -269,6 +348,7 @@ void startServices() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/cmd", HTTP_POST, handleCmd);
   server.on("/api/settings", HTTP_POST, handleSettings);
+  server.on("/api/mqtt", HTTP_POST, handleMqtt);
   server.on("/api/reset", HTTP_POST, handleReset);
   updater.setup(&server, "/update", "admin", OTA_PASSWORD);
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });

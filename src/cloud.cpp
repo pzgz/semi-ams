@@ -1,6 +1,6 @@
 // 点灯 Blinker：控件名称与原厂"app控制界面配置.txt"一致，直接沿用原来的 App 界面
 //   btn-start-stop  开始/结束        btn-emergency  紧急停止/解除
-//   btn-restart     重启              btn-mqtt       （本固件不支持 MQTT，显示为灰色）
+//   btn-restart     重启              btn-mqtt       开启/关闭拓竹打印机 MQTT（按钮文字显示连接状态）
 //   tex-state       工作状态          tex-motor      电机状态
 //   tex-runtime     系统运行时长      num-rssi       WiFi 信号
 //   tex-ip          IP                tex-hint       提示
@@ -12,6 +12,8 @@
 #include "cloud.h"
 #include "config.h"
 #include "fsm.h"
+#include "printer.h"
+#include "settings.h"
 
 namespace {
 
@@ -21,6 +23,7 @@ uint32_t gLastPush = 0;
 uint32_t gLastRev = 0;
 bool gConnected = false;
 uint32_t gLastConnCheck = 0;
+uint32_t gLastMqttRev = 0;
 
 BlinkerButton btnStartStop((char*)"btn-start-stop");
 BlinkerButton btnEmergency((char*)"btn-emergency");
@@ -44,8 +47,37 @@ void onEmergency(const String& s) {
 void onRestart(const String& s) {
   if (isTap(s)) app::requestRestart("App");
 }
+void pushMqtt() {
+  const char* text;
+  const char* color;
+  if (!settingsMqttConfigured()) {
+    text = "MQTT未设置";
+    color = "#595959";
+  } else if (!printer::enabled()) {
+    text = "MQTT已关闭";
+    color = "#595959";
+  } else if (printer::connected()) {
+    text = "MQTT已连接";
+    color = "#00A90C";
+  } else {
+    text = "MQTT连接中";
+    color = "#FBA613";
+  }
+  btnMqtt.text(text);
+  btnMqtt.color(color);
+  btnMqtt.print();
+  gLastMqttRev = printer::revision();
+}
+
 void onMqtt(const String& s) {
-  if (isTap(s)) texHint.print("本固件不支持MQTT");
+  if (!isTap(s)) return;
+  if (!settingsMqttConfigured()) {
+    texHint.print(String("先在网页填写打印机IP、序列号和访问码：http://") + WiFi.localIP().toString());
+  } else {
+    printer::setEnabled(!printer::enabled());
+    texHint.print(printer::enabled() ? "拓竹打印机MQTT已开启" : "拓竹打印机MQTT已关闭");
+  }
+  pushMqtt();
 }
 
 String motorText() {
@@ -65,9 +97,7 @@ void heartbeat() {
   numRssi.print(WiFi.RSSI());
   texIp.print(WiFi.localIP().toString());
   texHint.print(String("网页调参：http://") + WiFi.localIP().toString());
-  btnMqtt.text("MQTT未启用");
-  btnMqtt.color("#595959");
-  btnMqtt.print();
+  pushMqtt();
   gLastPush = millis();
   gLastRev = app::status().rev;
 }
@@ -105,6 +135,9 @@ void loop() {
     gLastRev = rev;
     gLastPush = millis();
     pushState();
+  } else if (printer::revision() != gLastMqttRev && millis() - gLastPush >= UI_PUSH_INTERVAL_MS) {
+    gLastPush = millis();
+    pushMqtt();
   }
 }
 

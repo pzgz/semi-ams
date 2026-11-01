@@ -125,6 +125,8 @@ h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
 h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
 h3{font-size:17px;margin:30px 0 10px}
 h2+h3{margin-top:16px}
+h4{font-size:15px;margin:22px 0 8px}
+h3+h4{margin-top:12px}
 p,li{color:var(--text)}
 a{color:var(--accent)}
 hr{display:none}
