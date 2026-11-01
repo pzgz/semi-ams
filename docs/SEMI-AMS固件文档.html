@@ -1,0 +1,1484 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEMI-AMS 复刻固件技术文档</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#646a73; --border:#e3e5e9;
+  --accent:#1a5fd6; --accent-weak:#e9f0fd; --code-bg:#f1f3f5; --code-text:#24292f;
+  --row:#fafbfc; --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+    --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+    --row:#1e2128; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+  --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+  --row:#1e2128; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px 14px 6px;box-shadow:var(--shadow);font-size:13.5px}
+.toc summary{list-style:none;cursor:pointer;font-weight:600;padding:2px 12px 8px;color:var(--text)}
+.toc summary::-webkit-details-marker{display:none}
+.toc ul{list-style:none;margin:0;padding-left:12px}
+.toc-list>ul{padding-left:4px}
+.toc-list>ul>li{margin-top:6px}
+.toc-list>ul>li>a{color:var(--text);font-weight:600}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:3px 8px;border-radius:6px;color:var(--muted);text-decoration:none;line-height:1.45}
+.toc a:hover{background:var(--accent-weak);color:var(--text)}
+.toc a.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+main{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:36px 44px 48px;box-shadow:var(--shadow);min-width:0}
+h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
+h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:30px 0 10px}
+h2+h3{margin-top:16px}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+hr{display:none}
+strong{font-weight:650}
+ul,ol{padding-left:1.4em}
+li{margin:3px 0}
+code{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);color:var(--code-text);
+  padding:.12em .4em;border-radius:5px;word-break:break-word}
+pre{position:relative;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.55}
+pre code{background:none;padding:0;font-size:13px;word-break:normal;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  font-size:12px;border-radius:6px;padding:2px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus{opacity:1}
+.table-wrap{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--row);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even) td{background:var(--row)}
+td code{white-space:nowrap}
+figure.diagram{margin:18px 0 22px;padding:16px;background:#fff;color:#1f2329;color-scheme:light;border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+figure.diagram svg{max-width:100%;height:auto}
+figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figure.diagram svg foreignObject p{color:#1f2329}
+.theme-toggle{position:fixed;right:16px;bottom:16px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width: 1000px){
+  .layout{grid-template-columns:1fr;padding:16px 16px 72px;gap:14px}
+  .toc{position:static;max-height:none}
+  main{padding:22px 18px 32px;border-radius:12px}
+  h1{font-size:23px}
+  h2{font-size:19px}
+  figure.diagram{padding:10px}
+  figure.diagram svg{min-width:560px}
+}
+@media print{
+  body{background:#fff}
+  .toc,.theme-toggle,.copy{display:none}
+  .layout{display:block;padding:0}
+  main{border:none;box-shadow:none;padding:0}
+  h2{break-after:avoid}
+  pre,figure,.table-wrap{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <details class="toc" open>
+    <summary>目录</summary>
+    <div class="toc-list">
+<ul>
+<li><a href="#1-背景">1. 背景</a><ul>
+<li><a href="#11-设备是什么">1.1 设备是什么</a></li>
+<li><a href="#12-为什么要重写固件">1.2 为什么要重写固件</a></li>
+<li><a href="#13-原厂资料synologydrive3d打印20260819_semi-ams">1.3 原厂资料（~/SynologyDrive/3D打印/20260819_semi-ams/）</a></li>
+</ul>
+</li>
+<li><a href="#2-需求">2. 需求</a><ul>
+<li><a href="#21-功能需求">2.1 功能需求</a></li>
+<li><a href="#22-非功能需求">2.2 非功能需求</a></li>
+</ul>
+</li>
+<li><a href="#3-硬件">3. 硬件</a><ul>
+<li><a href="#31-主要器件">3.1 主要器件</a></li>
+<li><a href="#32-引脚分配">3.2 引脚分配</a></li>
+<li><a href="#33-硬件注意事项">3.3 硬件注意事项</a></li>
+</ul>
+</li>
+<li><a href="#4-软件设计">4. 软件设计</a><ul>
+<li><a href="#41-架构">4.1 架构</a></li>
+<li><a href="#42-文件结构">4.2 文件结构</a></li>
+<li><a href="#43-状态机">4.3 状态机</a></li>
+<li><a href="#44-传感器与按键">4.4 传感器与按键</a></li>
+<li><a href="#45-电机控制">4.5 电机控制</a></li>
+<li><a href="#46-网络">4.6 网络</a></li>
+<li><a href="#47-参数与存储">4.7 参数与存储</a></li>
+<li><a href="#48-安全机制">4.8 安全机制</a></li>
+<li><a href="#49-与原固件的差异">4.9 与原固件的差异</a></li>
+</ul>
+</li>
+<li><a href="#5-在-mac-上开发编译烧录测试">5. 在 Mac 上开发、编译、烧录、测试</a><ul>
+<li><a href="#51-准备环境只需一次">5.1 准备环境（只需一次）</a></li>
+<li><a href="#52-先跑仿真测试不需要开发板">5.2 先跑仿真测试（不需要开发板）</a></li>
+<li><a href="#53-编译">5.3 编译</a></li>
+<li><a href="#54-接线">5.4 接线</a></li>
+<li><a href="#55-备份原厂固件第一次烧录前必须做">5.5 备份原厂固件（第一次烧录前必须做）</a></li>
+<li><a href="#56-第一次烧录">5.6 第一次烧录</a></li>
+<li><a href="#57-配网与点灯">5.7 配网与点灯</a></li>
+<li><a href="#58-实机测试清单">5.8 实机测试清单</a></li>
+<li><a href="#59-调参建议">5.9 调参建议</a></li>
+<li><a href="#510-日常迭代">5.10 日常迭代</a></li>
+<li><a href="#511-常见问题">5.11 常见问题</a></li>
+</ul>
+</li>
+<li><a href="#6-验证现状">6. 验证现状</a></li>
+<li><a href="#7-已知限制与后续工作">7. 已知限制与后续工作</a></li>
+<li><a href="#8-附录">8. 附录</a><ul>
+<li><a href="#81-串口命令115200">8.1 串口命令（115200）</a></li>
+<li><a href="#82-设备网页接口">8.2 设备网页接口</a></li>
+<li><a href="#83-点灯控件">8.3 点灯控件</a></li>
+<li><a href="#84-蓝灯含义">8.4 蓝灯含义</a></li>
+<li><a href="#85-依赖版本">8.5 依赖版本</a></li>
+</ul>
+</li>
+</ul>
+</div>
+
+  </details>
+  <main>
+<h1 id="semi-ams-复刻固件技术文档">SEMI-AMS 复刻固件技术文档</h1>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>固件版本</td>
+<td>v1.0.0</td>
+</tr>
+<tr>
+<td>文档日期</td>
+<td>2026-11-01</td>
+</tr>
+<tr>
+<td>主控</td>
+<td>ESP-12S（ESP8266EX，4MB Flash）</td>
+</tr>
+<tr>
+<td>工程位置</td>
+<td><code>~/Workspace/pzgz/semi-ams-firmware</code></td>
+</tr>
+<tr>
+<td>原厂资料</td>
+<td><code>~/SynologyDrive/3D打印/20260819_semi-ams/</code></td>
+</tr>
+<tr>
+<td>开发框架</td>
+<td>PlatformIO + Arduino（ESP8266 core 3.1.2）</td>
+</tr>
+<tr>
+<td>当前状态</td>
+<td>代码完成，仿真测试通过；<strong>尚未在真实工具链上编译，也未上板实测</strong></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="1-背景">1. 背景</h2>
+<h3 id="11-设备是什么">1.1 设备是什么</h3>
+<p>SEMI-AMS 是给拓竹打印机外置料盘用的半自动供料器，同时带缓冲器。它由以下几部分组成：</p>
+<ul>
+<li>一个直流减速电机，由 DRV8870 驱动。</li>
+<li>两个微动开关：进料口开关和就绪开关。</li>
+<li>一个带磁铁的缓冲滑块，用两颗霍尔传感器（EMPTY / FULL）检测它的位置。</li>
+<li>两个按键：黑色 Start/Stop，红色 Emergency。</li>
+<li>ESP-12S 主控，可以通过点灯 Blinker App 远程控制。</li>
+</ul>
+<p>原厂只提供编译好的 <code>.bin</code> 固件，没有源码。</p>
+<h3 id="12-为什么要重写固件">1.2 为什么要重写固件</h3>
+<p>使用中发现一个故障：<strong>磁铁到了霍尔旁边却偶尔检测不到，必须把磁铁拿开一段距离再靠近才能恢复。</strong> 排查过程和结论如下：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>排查项</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>霍尔旁的 100nF 去耦电容（C8/C9）</td>
+<td>由 Gerber 确认，电容和 VCC 引脚同在一层直连，焊盘间距约 0.6mm，布局没问题。电源噪声最多影响一次 50ms 的采样，下一次就会自己纠正，无法解释"一直卡住"。<strong>不是原因。</strong></td>
+</tr>
+<tr>
+<td>霍尔芯片 DRV5032FA</td>
+<td>推挽输出，3.3V 供电在规格内，全极型（N/S 都能触发）。芯片本身不需要"先释放再触发"。</td>
+</tr>
+<tr>
+<td>换大磁铁</td>
+<td>问题基本消失，说明和磁场变化的方式有关。</td>
+</tr>
+<tr>
+<td>在旁边晃动磁铁</td>
+<td>不能恢复，只有拿开再靠近才行，说明有某个状态"记住了"错误结果。</td>
+</tr>
+<tr>
+<td>在两颗霍尔之间直接移动</td>
+<td>容易漏检；先特意拿开一段时间再靠近则不漏。说明问题取决于两次事件之间的间隔。</td>
+</tr>
+<tr>
+<td>原厂固件字符串</td>
+<td>出现 <code>Configuring pins and interrupts...</code>，说明原固件用中断按边沿处理传感器事件。</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>结论：</strong> 最可能的原因是原固件按边沿处理事件，两次事件间隔太短时丢掉了一个边沿，导致内部状态和实际电平不一致，一直要等到下一对边沿出现才恢复。这个判断还没有用万用表测 OUT 脚电压最终证实，但新固件的设计让这类问题不可能再发生，详见 4.4 节。</p>
+<h3 id="13-原厂资料synologydrive3d打印20260819_semi-ams">1.3 原厂资料（<code>~/SynologyDrive/3D打印/20260819_semi-ams/</code>）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>离线单机版.bin</code></td>
+<td>无联网版本</td>
+</tr>
+<tr>
+<td><code>远程控制版本（无MQTT).bin</code></td>
+<td>本固件的复刻对象，原版号 V2.5.4</td>
+</tr>
+<tr>
+<td><code>远程控制版本（支持MQTT).bin</code>、<code>…MQTT&amp;兼容tpu).bin</code></td>
+<td>带拓竹 MQTT 和 TPU 助力的版本，本期不做</td>
+</tr>
+<tr>
+<td><code>app控制界面配置.txt</code></td>
+<td>点灯 App 界面配置，本固件直接沿用</td>
+</tr>
+<tr>
+<td><code>烧录教程.pdf</code></td>
+<td>原厂烧录与配网教程</td>
+</tr>
+<tr>
+<td><code>Gerber_PCB2_*.zip</code>、<code>Netlist_*.net</code>、<code>semi-ams_bom.xlsx</code></td>
+<td>PCB、网表、BOM</td>
+</tr>
+</tbody>
+</table></div>
+<p>从原固件中提取到的关键信息：</p>
+<ul>
+<li><strong>状态机</strong>：状态有 <code>NO_MATERIAL</code>、<code>MATERIAL_LOADING</code>、<code>MATERIAL_READY</code>、<code>PRINTING</code>、<code>EMERGENCY_STOPPED</code>。事件有 <code>MATERIAL_IN/OUT/READY/UNREADY/FULL/LACK</code>、<code>PRINTER_START/STOP</code>、<code>EMERGENCY_STOP/RESUME</code>。</li>
+<li><strong>中文显示名</strong>：无耗材、耗材吸入中、耗材就绪、打印中、紧急停止。</li>
+<li><strong>就绪开关兜底</strong>：日志里有 <code>Ready Check Failed! Use Full Check instead.</code>，即就绪开关没触发时用 FULL 霍尔判断就绪。</li>
+<li><strong>配网</strong>：使用 AsyncWiFiManager，热点名 <code>SEMI-AMS</code>，自定义字段 <code>Blinker Secret</code>。</li>
+<li><strong>点灯控件 key</strong>：<code>btn-start-stop</code>、<code>btn-emergency</code>、<code>btn-restart</code>、<code>btn-mqtt</code>、<code>tex-state</code>、<code>tex-motor</code>、<code>tex-runtime</code>、<code>tex-ip</code>、<code>num-rssi</code>，运行时长格式为 <code>x天x时x分</code>。</li>
+</ul>
+<hr />
+<h2 id="2-需求">2. 需求</h2>
+<h3 id="21-功能需求">2.1 功能需求</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>实现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>进料口插入耗材后自动吸入，到就绪位置停止</td>
+<td>插入并保持 0.5 秒后正转吸入，就绪开关触发即停。就绪开关失效时，用 FULL 霍尔兜底</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>黑色按钮开始打印</td>
+<td>就绪时按下进入打印状态，先送料到缓冲器满</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>打印中自动补料</td>
+<td>EMPTY 触发开始补料，FULL 触发停止</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>打印结束自动退料</td>
+<td>打印中按黑色按钮开始反转。<strong>退过就绪开关后再多退 0.3 秒停止，耗材留在进料口</strong>（状态"已退料"）</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>退料后还能重新进料</td>
+<td>"已退料"时按黑色按钮，先把耗材吸回就绪位置，再直接进入打印送料</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>红色按钮紧急停止</td>
+<td>任何状态下按下立即停机，再按一次恢复到原来的状态</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>长按任意键重启</td>
+<td>按住 3 秒，蓝灯急闪后松开即重启</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>每 7 天自动重启</td>
+<td>运行满 7 天且处于空闲状态时执行</td>
+</tr>
+<tr>
+<td>F9</td>
+<td>联网远程控制</td>
+<td>点灯 Blinker，沿用原厂 App 界面配置</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>配网</td>
+<td><code>SEMI-AMS</code> 热点，填写 WiFi 和 Blinker 密钥。蓝灯慢闪 = 连接中，快闪 = 配网中，常亮 = 已连接</td>
+</tr>
+<tr>
+<td>—</td>
+<td>TPU 助力、拓竹 MQTT 自动进退料</td>
+<td><strong>本期不做</strong>。App 里的 MQTT 按钮显示为灰色"MQTT未启用"</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="22-非功能需求">2.2 非功能需求</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>编号</th>
+<th>需求</th>
+<th>实现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>N1</td>
+<td>不再漏检</td>
+<td>所有传感器每 10ms 按电平判断，不依赖边沿</td>
+</tr>
+<tr>
+<td>N2</td>
+<td>网络卡顿不影响电机</td>
+<td>采样、状态机和电机控制运行在独立的 10ms 系统定时器里</td>
+</tr>
+<tr>
+<td>N3</td>
+<td>异常可以自我保护</td>
+<td>吸入、补料、退料都有超时，超时后进入紧急停止；固件升级时自动停电机</td>
+</tr>
+<tr>
+<td>N4</td>
+<td>现场可调参</td>
+<td>速度、方向、超时等参数可以在网页或串口修改，保存在 Flash</td>
+</tr>
+<tr>
+<td>N5</td>
+<td>逻辑可离线验证</td>
+<td>状态机、电机和按键逻辑是纯 C++，可以在 Mac 上跑仿真测试</td>
+</tr>
+<tr>
+<td>N6</td>
+<td>上电安全</td>
+<td>上电或重启后不会自动转电机，只有"插入耗材"这个动作会触发吸入</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="3-硬件">3. 硬件</h2>
+<h3 id="31-主要器件">3.1 主要器件</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>位号</th>
+<th>器件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>U1</td>
+<td>ESP-12S</td>
+<td>ESP8266EX + 4MB Flash，板载蓝灯接 GPIO2</td>
+</tr>
+<tr>
+<td>U10</td>
+<td>DRV8870</td>
+<td>H 桥电机驱动。VREF 接 3V3、采样电阻 R8 = 0.2Ω，所以限流约 3.3 / (10 × 0.2) ≈ <strong>1.65A</strong></td>
+</tr>
+<tr>
+<td>U17</td>
+<td>CN3903</td>
+<td>24V 降压到 3.3V</td>
+</tr>
+<tr>
+<td>U11 / U12</td>
+<td>DRV5032FA</td>
+<td>霍尔开关：推挽输出、全极型、20Hz 采样。动作点最大 4.8mT，释放点最小 0.5mT</td>
+</tr>
+<tr>
+<td>U13 / U14</td>
+<td>微动开关</td>
+<td>进料口开关 IN_CHECK、就绪开关 READY_CHECK，都接到 GND</td>
+</tr>
+<tr>
+<td>U18 / U19</td>
+<td>轻触按键</td>
+<td>黑色 START-STOP、红色 EMERGENCY</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="32-引脚分配">3.2 引脚分配</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>GPIO</th>
+<th>连接</th>
+<th>有效电平</th>
+<th>固件设置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>12</td>
+<td>U11 EMPTY 霍尔</td>
+<td>低 = 缓冲器空</td>
+<td><code>INPUT</code></td>
+</tr>
+<tr>
+<td>13</td>
+<td>U12 FULL 霍尔</td>
+<td>低 = 缓冲器满</td>
+<td><code>INPUT</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>U13 进料口开关</td>
+<td>低 = 有耗材</td>
+<td><code>INPUT_PULLUP</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>U14 就绪开关</td>
+<td>低 = 就绪</td>
+<td><code>INPUT_PULLUP</code>。<strong>这个脚同时驱动缺料红灯的 MOS 管，严禁设为输出</strong></td>
+</tr>
+<tr>
+<td>0</td>
+<td>黑色按钮（R3 10k 上拉）</td>
+<td>按下为低</td>
+<td><code>INPUT_PULLUP</code></td>
+</tr>
+<tr>
+<td>15</td>
+<td>红色按钮（R14 4.7k 接 3V3）</td>
+<td>按下为高</td>
+<td><code>INPUT</code>（模组内部下拉）</td>
+</tr>
+<tr>
+<td>14</td>
+<td>DRV8870 IN1</td>
+<td>—</td>
+<td><code>OUTPUT</code> / PWM</td>
+</tr>
+<tr>
+<td>16</td>
+<td>DRV8870 IN2</td>
+<td>—</td>
+<td><code>OUTPUT</code> / PWM</td>
+</tr>
+<tr>
+<td>2</td>
+<td>板载蓝灯</td>
+<td>低电平亮</td>
+<td><code>OUTPUT</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="33-硬件注意事项">3.3 硬件注意事项</h3>
+<p>以下来自网表和 Gerber 分析，供以后改板参考。</p>
+<ol>
+<li><strong>连接器额定电流偏低</strong>：CN1（24V 输入）和 CN3（电机）都是 1.25mm 间距、额定 1A 的连接器，而电机堵转时限流约 1.65A。R8 在 1.65A 时功耗约 0.54W，超过它 0.5W 的额定值。建议按电机实际电流把 R8 改成 0.33Ω（约 1A）。</li>
+<li><strong>红色按钮的接法余量不足</strong>：按下时 GPIO15 的电压由 R14 和模组内部下拉分压决定，余量不大。C24 跨接在按键两端，起不到对地消抖的作用。实测时要确认红色按钮每次都能识别；网页日志里会显示"红色按钮"。</li>
+<li><strong>上电时不要按着按钮</strong>：上电时按住黑色按钮会进入下载模式，按住红色按钮会导致启动失败。</li>
+<li><strong>霍尔的位置</strong>：两颗霍尔相距约 18.9mm。U11 的背面是 ESP-12S 的屏蔽罩，U12 的背面是 CN3903，两边磁场环境不完全相同。</li>
+<li><strong>磁铁选型</strong>（N35，磁极面正对芯片，间距 4mm 时的理论值）：</li>
+</ol>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>磁铁 直径×厚</th>
+<th>正下方场强</th>
+<th>另一颗霍尔处</th>
+<th>触发区宽度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3×2mm</td>
+<td>20 mT</td>
+<td>0.15 mT</td>
+<td>7.6 mm</td>
+</tr>
+<tr>
+<td>4×2mm</td>
+<td>33 mT</td>
+<td>0.26 mT</td>
+<td>9.4 mm</td>
+</tr>
+<tr>
+<td>5×2mm</td>
+<td>45 mT</td>
+<td>0.41 mT</td>
+<td>10.6 mm</td>
+</tr>
+<tr>
+<td>6×3mm</td>
+<td>72 mT</td>
+<td>0.82 mT</td>
+<td>12.8 mm</td>
+</tr>
+<tr>
+<td>8×3mm</td>
+<td>97 mT</td>
+<td>1.5 mT</td>
+<td>14.8 mm</td>
+</tr>
+<tr>
+<td>10×3mm</td>
+<td>113 mT</td>
+<td>2.3 mT</td>
+<td>16.4 mm</td>
+</tr>
+</tbody>
+</table></div>
+<p>3×2 到 5×2mm 最合适。磁铁太大时，可能让另一颗霍尔无法释放，或者让两个触发区连在一起。</p>
+<hr />
+<h2 id="4-软件设计">4. 软件设计</h2>
+<h3 id="41-架构">4.1 架构</h3>
+<figure class="diagram"><svg id="diagram-0" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 1072.39px; background-color: white;" viewBox="0 0 1072.390625 526" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#diagram-0{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;fill:#000000;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#diagram-0 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#diagram-0 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#diagram-0 .error-icon{fill:#552222;}#diagram-0 .error-text{fill:#552222;stroke:#552222;}#diagram-0 .edge-thickness-normal{stroke-width:1px;}#diagram-0 .edge-thickness-thick{stroke-width:3.5px;}#diagram-0 .edge-pattern-solid{stroke-dasharray:0;}#diagram-0 .edge-thickness-invisible{stroke-width:0;fill:none;}#diagram-0 .edge-pattern-dashed{stroke-dasharray:3;}#diagram-0 .edge-pattern-dotted{stroke-dasharray:2;}#diagram-0 .marker{fill:#666;stroke:#666;}#diagram-0 .marker.cross{stroke:#666;}#diagram-0 svg{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;}#diagram-0 p{margin:0;}#diagram-0 .label{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;color:#000000;}#diagram-0 .cluster-label text{fill:#333;}#diagram-0 .cluster-label span{color:#333;}#diagram-0 .cluster-label span p{background-color:transparent;}#diagram-0 .label text,#diagram-0 span{fill:#000000;color:#000000;}#diagram-0 .node rect,#diagram-0 .node circle,#diagram-0 .node ellipse,#diagram-0 .node polygon,#diagram-0 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#diagram-0 .rough-node .label text,#diagram-0 .node .label text,#diagram-0 .image-shape .label,#diagram-0 .icon-shape .label{text-anchor:middle;}#diagram-0 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram-0 .rough-node .label,#diagram-0 .node .label,#diagram-0 .image-shape .label,#diagram-0 .icon-shape .label{text-align:center;}#diagram-0 .node.clickable{cursor:pointer;}#diagram-0 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#diagram-0 .arrowheadPath{fill:#333333;}#diagram-0 .edgePath .path{stroke:#666;stroke-width:1px;}#diagram-0 .flowchart-link{stroke:#666;fill:none;}#diagram-0 .edgeLabel{background-color:white;text-align:center;}#diagram-0 .edgeLabel p{background-color:white;}#diagram-0 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#diagram-0 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#diagram-0 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#diagram-0 .cluster text{fill:#333;}#diagram-0 .cluster span{color:#333;}#diagram-0 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#diagram-0 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#diagram-0 rect.text{fill:none;stroke-width:0;}#diagram-0 .icon-shape,#diagram-0 .image-shape{background-color:white;text-align:center;}#diagram-0 .icon-shape p,#diagram-0 .image-shape p{background-color:white;padding:2px;}#diagram-0 .icon-shape .label rect,#diagram-0 .image-shape .label rect{opacity:0.5;background-color:white;fill:white;}#diagram-0 .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#diagram-0 .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#diagram-0 .node .neo-node{stroke:#999;}#diagram-0 [data-look="neo"].node rect,#diagram-0 [data-look="neo"].cluster rect,#diagram-0 [data-look="neo"].node polygon{stroke:url(#diagram-0-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-0 [data-look="neo"].swimlane.cluster rect{filter:none;}#diagram-0 [data-look="neo"].node path{stroke:url(#diagram-0-gradient);stroke-width:1px;}#diagram-0 [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-0 [data-look="neo"].node .neo-line path{stroke:#999;filter:none;}#diagram-0 [data-look="neo"].node circle{stroke:url(#diagram-0-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-0 [data-look="neo"].node circle .state-start{fill:#000000;}#diagram-0 [data-look="neo"].icon-shape .icon{fill:url(#diagram-0-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-0 [data-look="neo"].icon-shape .icon-neo path{stroke:url(#diagram-0-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-0 :root{--mermaid-font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;}</style><g><marker id="diagram-0_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-0_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"/></marker><marker id="diagram-0_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"/></marker><g class="root"><g class="clusters"/><g class="edgePaths"><path d="M481.526,153L476.97,159.042C472.414,165.083,463.303,177.167,464.113,188.77C464.923,200.374,475.655,211.498,481.021,217.059L486.386,222.621" id="diagram-0-L_L_Q_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_L_Q_0" data-points="W3sieCI6NDgxLjUyNjA0MTY2NjY2NjcsInkiOjE1M30seyJ4Ijo0NTQuMTkxNDA2MjUsInkiOjE4OS4yNX0seyJ4Ijo0ODkuMTYzNjYwMzg2MDI5NCwieSI6MjI1LjV9XQ==" data-look="classic" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/><path d="M583.227,225.5L589.056,219.458C594.884,213.417,606.542,201.333,608.216,189.782C609.89,178.231,601.582,167.213,597.427,161.703L593.273,156.194" id="diagram-0-L_Q_L_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_Q_L_0" data-points="W3sieCI6NTgzLjIyNjk2NDYxMzk3MDYsInkiOjIyNS41fSx7IngiOjYxOC4xOTkyMTg3NSwieSI6MTg5LjI1fSx7IngiOjU5MC44NjQ1ODMzMzMzMzM0LCJ5IjoxNTN9XQ==" data-look="classic" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/><path d="M536.195,327L536.195,330.5C536.195,334,536.195,341,536.195,348C536.195,355,536.195,362,536.195,365.5L536.195,369" id="diagram-0-L_Q_T_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_Q_T_0" data-points="W3sieCI6NTM2LjE5NTMxMjUsInkiOjMyM30seyJ4Ijo1MzYuMTk1MzEyNSwieSI6MzQ4fSx7IngiOjUzNi4xOTUzMTI1LCJ5IjozNzN9XQ==" data-look="classic" marker-start="url(#diagram-0_flowchart-v2-pointStart)" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel" transform="translate(454.19140625, 189.25)"><g class="label" data-id="L_L_Q_0" transform="translate(-78.90625, -11.25)"><foreignObject width="157.8125" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>开始 / 急停 / 点动 / 参数</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(616.47424, 191.038)"><g class="label" data-id="L_Q_L_0" transform="translate(-65.1015625, -11.25)"><foreignObject width="130.203125" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>状态 / 传感器 / 日志</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_Q_T_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g></g><g class="nodes"><g class="root" transform="translate(4.0390625, 365)"><g class="clusters"><g class="cluster" id="diagram-0-T" data-look="classic"><rect style="" x="8" y="8" width="1048.3125" height="145"/><g class="cluster-label" transform="translate(422.7890625, 8)"><foreignObject width="218.734375" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5;"><span class="nodeLabel"><p>tick() 每 10ms：不受 loop() 影响</p></span></div></foreignObject></g></g></g><g class="edgePaths"><path d="M220.703,80.5L226.953,80.5C233.203,80.5,245.703,80.5,257.536,80.5C269.37,80.5,280.536,80.5,286.12,80.5L291.703,80.5" id="diagram-0-L_A_B_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_A_B_0" data-points="W3sieCI6MjIwLjcwMzEyNSwieSI6ODAuNX0seyJ4IjoyNTguMjAzMTI1LCJ5Ijo4MC41fSx7IngiOjI5NS43MDMxMjUsInkiOjgwLjV9XQ==" data-look="classic" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/><path d="M428.313,80.5L434.563,80.5C440.813,80.5,453.313,80.5,465.146,80.5C476.979,80.5,488.146,80.5,493.729,80.5L499.313,80.5" id="diagram-0-L_B_C_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_B_C_0" data-points="W3sieCI6NDI4LjMxMjUsInkiOjgwLjV9LHsieCI6NDY1LjgxMjUsInkiOjgwLjV9LHsieCI6NTAzLjMxMjUsInkiOjgwLjV9XQ==" data-look="classic" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/><path d="M608.328,80.5L614.578,80.5C620.828,80.5,633.328,80.5,645.161,80.5C656.995,80.5,668.161,80.5,673.745,80.5L679.328,80.5" id="diagram-0-L_C_D_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_D_0" data-points="W3sieCI6NjA4LjMyODEyNSwieSI6ODAuNX0seyJ4Ijo2NDUuODI4MTI1LCJ5Ijo4MC41fSx7IngiOjY4My4zMjgxMjUsInkiOjgwLjV9XQ==" data-look="classic" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/><path d="M821.938,80.5L828.188,80.5C834.438,80.5,846.938,80.5,858.771,80.5C870.604,80.5,881.771,80.5,887.354,80.5L892.938,80.5" id="diagram-0-L_D_E_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_D_E_0" data-points="W3sieCI6ODIxLjkzNzUsInkiOjgwLjV9LHsieCI6ODU5LjQzNzUsInkiOjgwLjV9LHsieCI6ODk2LjkzNzUsInkiOjgwLjV9XQ==" data-look="classic" marker-end="url(#diagram-0_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_A_B_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_B_C_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_C_D_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_D_E_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="diagram-0-flowchart-A-6" data-look="classic" transform="translate(133.1015625, 80.5)"><rect class="basic label-container" style="" x="-87.6015625" y="-37.5" width="175.203125" height="75"/><g class="label" style="" transform="translate(-57.6015625, -22.5)"><rect/><foreignObject width="115.203125" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>采样 + 消抖<br />霍尔 / 开关 / 按键</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-B-7" data-look="classic" transform="translate(362.0078125, 80.5)"><rect class="basic label-container" style="" x="-66.3046875" y="-37.5" width="132.609375" height="75"/><g class="label" style="" transform="translate(-36.3046875, -22.5)"><rect/><foreignObject width="72.609375" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>按键识别<br />短按 / 长按</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-C-8" data-look="classic" transform="translate(555.8203125, 80.5)"><rect class="basic label-container" style="" x="-52.5078125" y="-37.5" width="105.015625" height="75"/><g class="label" style="" transform="translate(-22.5078125, -22.5)"><rect/><foreignObject width="45.015625" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>状态机<br />Fsm</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-D-9" data-look="classic" transform="translate(752.6328125, 80.5)"><rect class="basic label-container" style="" x="-69.3046875" y="-37.5" width="138.609375" height="75"/><g class="label" style="" transform="translate(-39.3046875, -22.5)"><rect/><foreignObject width="78.609375" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>电机逻辑<br />MotorLogic</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-E-10" data-look="classic" transform="translate(957.875, 80.5)"><rect class="basic label-container" style="" x="-60.9375" y="-37.5" width="121.875" height="75"/><g class="label" style="" transform="translate(-30.9375, -22.5)"><rect/><foreignObject width="61.875" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>DRV8870<br />IN1 / IN2</p></span></div></foreignObject></g></g></g></g><g class="root" transform="translate(0, 0)"><g class="clusters"><g class="cluster" id="diagram-0-L" data-look="classic"><rect style="" x="8" y="8" width="1056.390625" height="145"/><g class="cluster-label" transform="translate(431.0703125, 8)"><foreignObject width="210.25" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5;"><span class="nodeLabel"><p>loop() 主循环：可能被网络卡住</p></span></div></foreignObject></g></g></g><g class="edgePaths"><path d="M195.797,80.5L202.047,80.5C208.297,80.5,220.797,80.5,233.297,80.5C245.797,80.5,258.297,80.5,264.547,80.5L270.797,80.5" id="diagram-0-L_G_H_0" class="edge-thickness-invisible edge-pattern-solid" style=";" data-edge="true" data-et="edge" data-id="L_G_H_0" data-points="W3sieCI6MTk1Ljc5Njg3NSwieSI6ODAuNX0seyJ4IjoyMzMuMjk2ODc1LCJ5Ijo4MC41fSx7IngiOjI3MC43OTY4NzUsInkiOjgwLjV9XQ==" data-look="classic"/><path d="M392.313,80.5L398.563,80.5C404.813,80.5,417.313,80.5,429.813,80.5C442.313,80.5,454.813,80.5,461.063,80.5L467.313,80.5" id="diagram-0-L_H_I_0" class="edge-thickness-invisible edge-pattern-solid" style=";" data-edge="true" data-et="edge" data-id="L_H_I_0" data-points="W3sieCI6MzkyLjMxMjUsInkiOjgwLjV9LHsieCI6NDI5LjgxMjUsInkiOjgwLjV9LHsieCI6NDY3LjMxMjUsInkiOjgwLjV9XQ==" data-look="classic"/><path d="M610.188,80.5L616.438,80.5C622.688,80.5,635.188,80.5,647.688,80.5C660.188,80.5,672.688,80.5,678.938,80.5L685.188,80.5" id="diagram-0-L_I_J_0" class="edge-thickness-invisible edge-pattern-solid" style=";" data-edge="true" data-et="edge" data-id="L_I_J_0" data-points="W3sieCI6NjEwLjE4NzUsInkiOjgwLjV9LHsieCI6NjQ3LjY4NzUsInkiOjgwLjV9LHsieCI6Njg1LjE4NzUsInkiOjgwLjV9XQ==" data-look="classic"/><path d="M805.203,80.5L811.453,80.5C817.703,80.5,830.203,80.5,842.703,80.5C855.203,80.5,867.703,80.5,873.953,80.5L880.203,80.5" id="diagram-0-L_J_K_0" class="edge-thickness-invisible edge-pattern-solid" style=";" data-edge="true" data-et="edge" data-id="L_J_K_0" data-points="W3sieCI6ODA1LjIwMzEyNSwieSI6ODAuNX0seyJ4Ijo4NDIuNzAzMTI1LCJ5Ijo4MC41fSx7IngiOjg4MC4yMDMxMjUsInkiOjgwLjV9XQ==" data-look="classic"/></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_G_H_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_H_I_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_I_J_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_J_K_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="diagram-0-flowchart-G-0" data-look="classic" transform="translate(120.6484375, 80.5)"><rect class="basic label-container" style="" x="-75.1484375" y="-37.5" width="150.296875" height="75"/><g class="label" style="" transform="translate(-45.1484375, -22.5)"><rect/><foreignObject width="90.296875" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>WiFi / 配网<br />WiFiManager</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-H-1" data-look="classic" transform="translate(331.5546875, 80.5)"><rect class="basic label-container" style="" x="-60.7578125" y="-37.5" width="121.515625" height="75"/><g class="label" style="" transform="translate(-30.7578125, -22.5)"><rect/><foreignObject width="61.515625" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>设备网页<br />OTA 升级</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-I-2" data-look="classic" transform="translate(538.75, 80.5)"><rect class="basic label-container" style="" x="-71.4375" y="-26.25" width="142.875" height="52.5"/><g class="label" style="" transform="translate(-41.4375, -11.25)"><rect/><foreignObject width="82.875" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>点灯 Blinker</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-J-3" data-look="classic" transform="translate(745.1953125, 80.5)"><rect class="basic label-container" style="" x="-60.0078125" y="-37.5" width="120.015625" height="75"/><g class="label" style="" transform="translate(-30.0078125, -22.5)"><rect/><foreignObject width="60.015625" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>串口命令<br />日志输出</p></span></div></foreignObject></g></g><g class="node default" id="diagram-0-flowchart-K-4" data-look="classic" transform="translate(953.546875, 80.5)"><rect class="basic label-container" style="" x="-73.34375" y="-37.5" width="146.6875" height="75"/><g class="label" style="" transform="translate(-43.34375, -22.5)"><rect/><foreignObject width="86.6875" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>重启执行<br />7 天定期重启</p></span></div></foreignObject></g></g></g></g><g class="node default" id="diagram-0-flowchart-Q-5" data-look="classic" transform="translate(536.1953125, 274.25)"><rect class="basic label-container" style="" x="-130" y="-48.75" width="260" height="97.5"/><g class="label" style="" transform="translate(-100, -33.75)"><rect/><foreignObject width="200" height="67.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel"><p>volatile 命令标志 / 状态快照<br />（协作式调度，两边不会同时执行）</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="diagram-0-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><defs><filter id="diagram-0-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><linearGradient id="diagram-0-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="hsl(0, 0%, 83.3333333333%)" stop-opacity="1"/><stop offset="100%" stop-color="hsl(0, 0%, 88.9215686275%)" stop-opacity="1"/></linearGradient></svg></figure>
+<p><strong>为什么分成两个执行上下文：</strong> ESP8266 是协作式调度。点灯库连接服务器、配网页面处理请求时，<code>loop()</code> 可能被卡住好几秒。传感器、状态机和电机放在 <code>Ticker</code> 的 10ms 回调里，只要网络代码在等待时让出 CPU，它就照常运行，缓冲器满了能及时停电机。两边通过几个 <code>volatile</code> 标志交换命令；因为是协作式调度，两边不会同时执行，所以不存在竞争。</p>
+<h3 id="42-文件结构">4.2 文件结构</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>作用</th>
+<th>是否依赖硬件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/fsm.h/.cpp</code></td>
+<td>状态机：全部业务逻辑</td>
+<td>否，可以仿真测试</td>
+</tr>
+<tr>
+<td><code>src/motor_logic.h</code></td>
+<td>电机控制：起步、加速、刹车、换向、PWM 计算</td>
+<td>否，可以仿真测试</td>
+</tr>
+<tr>
+<td><code>src/input.h</code></td>
+<td>消抖、按键短按/长按识别</td>
+<td>否，可以仿真测试</td>
+</tr>
+<tr>
+<td><code>src/main.cpp</code></td>
+<td>引脚初始化、10ms tick、日志、串口命令、重启</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>src/net.h/.cpp</code></td>
+<td>WiFi 配网、设备网页、OTA、mDNS</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>src/cloud.h/.cpp</code></td>
+<td>点灯 Blinker 控件</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>src/settings.h/.cpp</code></td>
+<td>参数读写（LittleFS）</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>src/app.h</code></td>
+<td>各模块共用的接口</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>include/config.h</code></td>
+<td>引脚、网络、时间、电机等常量</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>host_test/</code></td>
+<td>电脑上运行的仿真测试</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>platformio.ini</code></td>
+<td>编译、烧录、OTA 配置</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="43-状态机">4.3 状态机</h3>
+<figure class="diagram"><svg id="diagram-1" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 770.145px; background-color: white;" viewBox="0 0 770.14453125 761" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#diagram-1{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;fill:#000000;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#diagram-1 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#diagram-1 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#diagram-1 .error-icon{fill:#552222;}#diagram-1 .error-text{fill:#552222;stroke:#552222;}#diagram-1 .edge-thickness-normal{stroke-width:1px;}#diagram-1 .edge-thickness-thick{stroke-width:3.5px;}#diagram-1 .edge-pattern-solid{stroke-dasharray:0;}#diagram-1 .edge-thickness-invisible{stroke-width:0;fill:none;}#diagram-1 .edge-pattern-dashed{stroke-dasharray:3;}#diagram-1 .edge-pattern-dotted{stroke-dasharray:2;}#diagram-1 .marker{fill:#666;stroke:#666;}#diagram-1 .marker.cross{stroke:#666;}#diagram-1 svg{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;}#diagram-1 p{margin:0;}#diagram-1 .label{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;color:#000000;}#diagram-1 .cluster-label text{fill:#333;}#diagram-1 .cluster-label span{color:#333;}#diagram-1 .cluster-label span p{background-color:transparent;}#diagram-1 .label text,#diagram-1 span{fill:#000000;color:#000000;}#diagram-1 .node rect,#diagram-1 .node circle,#diagram-1 .node ellipse,#diagram-1 .node polygon,#diagram-1 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#diagram-1 .rough-node .label text,#diagram-1 .node .label text,#diagram-1 .image-shape .label,#diagram-1 .icon-shape .label{text-anchor:middle;}#diagram-1 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram-1 .rough-node .label,#diagram-1 .node .label,#diagram-1 .image-shape .label,#diagram-1 .icon-shape .label{text-align:center;}#diagram-1 .node.clickable{cursor:pointer;}#diagram-1 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#diagram-1 .arrowheadPath{fill:#333333;}#diagram-1 .edgePath .path{stroke:#666;stroke-width:1px;}#diagram-1 .flowchart-link{stroke:#666;fill:none;}#diagram-1 .edgeLabel{background-color:white;text-align:center;}#diagram-1 .edgeLabel p{background-color:white;}#diagram-1 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#diagram-1 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#diagram-1 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#diagram-1 .cluster text{fill:#333;}#diagram-1 .cluster span{color:#333;}#diagram-1 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#diagram-1 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#diagram-1 rect.text{fill:none;stroke-width:0;}#diagram-1 .icon-shape,#diagram-1 .image-shape{background-color:white;text-align:center;}#diagram-1 .icon-shape p,#diagram-1 .image-shape p{background-color:white;padding:2px;}#diagram-1 .icon-shape .label rect,#diagram-1 .image-shape .label rect{opacity:0.5;background-color:white;fill:white;}#diagram-1 .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#diagram-1 .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#diagram-1 .node .neo-node{stroke:#999;}#diagram-1 [data-look="neo"].node rect,#diagram-1 [data-look="neo"].cluster rect,#diagram-1 [data-look="neo"].node polygon{stroke:url(#diagram-1-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-1 [data-look="neo"].swimlane.cluster rect{filter:none;}#diagram-1 [data-look="neo"].node path{stroke:url(#diagram-1-gradient);stroke-width:1px;}#diagram-1 [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-1 [data-look="neo"].node .neo-line path{stroke:#999;filter:none;}#diagram-1 [data-look="neo"].node circle{stroke:url(#diagram-1-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-1 [data-look="neo"].node circle .state-start{fill:#000000;}#diagram-1 [data-look="neo"].icon-shape .icon{fill:url(#diagram-1-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-1 [data-look="neo"].icon-shape .icon-neo path{stroke:url(#diagram-1-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-1 :root{--mermaid-font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;}</style><g><marker id="diagram-1_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-1_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"/></marker><marker id="diagram-1_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"/></marker><g class="root"><g class="clusters"/><g class="edgePaths"><path d="M405.855,56.497L390.021,63.206C374.186,69.914,342.517,83.332,326.682,95.416C310.848,107.5,310.848,118.25,310.848,123.625L310.848,129" id="diagram-1-L_N_L_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_N_L_0" data-points="W3sieCI6NDA1Ljg1NTQ2ODc1LCJ5Ijo1Ni40OTY3MTY0NDk1Mjg2NX0seyJ4IjozMTAuODQ3NjU2MjUsInkiOjk2Ljc1fSx7IngiOjMxMC44NDc2NTYyNSwieSI6MTMzfV0=" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M312.182,185.5L312.585,193.417C312.987,201.333,313.793,217.167,314.195,232.333C314.598,247.5,314.598,262,314.598,269.25L314.598,276.5" id="diagram-1-L_L_R_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_L_R_0" data-points="W3sieCI6MzEyLjE4MjQwMjAxMjcxMTg2LCJ5IjoxODUuNX0seyJ4IjozMTQuNTk3NjU2MjUsInkiOjIzM30seyJ4IjozMTQuNTk3NjU2MjUsInkiOjI4MC41fV0=" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M254.59,324.397L229.171,331.873C203.751,339.348,152.913,354.299,128.498,367.161C104.083,380.023,106.092,390.795,107.097,396.181L108.101,401.568" id="diagram-1-L_R_P_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_R_P_0" data-points="W3sieCI6MjU0LjU4OTg0Mzc1LCJ5IjozMjQuMzk3NDEwMjEyMTA5fSx7IngiOjEwMi4wNzQyMTg3NSwieSI6MzY5LjI1fSx7IngiOjEwOC44MzQ2MTMzNDc0NTc2MywieSI6NDA1LjV9XQ==" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M115.828,480.5L115.828,486.542C115.828,492.583,115.828,504.667,139.569,518.173C163.31,531.68,210.792,546.61,234.533,554.075L258.274,561.54" id="diagram-1-L_P_U_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_P_U_0" data-points="W3sieCI6MTE1LjgyODEyNSwieSI6NDgwLjV9LHsieCI6MTE1LjgyODEyNSwieSI6NTE2Ljc1fSx7IngiOjI2Mi4wODk4NDM3NSwieSI6NTYyLjczOTczMTc0ODA1OTR9XQ==" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M314.598,605.5L314.598,611.542C314.598,617.583,314.598,629.667,346.04,644.14C377.483,658.613,440.368,675.476,471.811,683.908L503.254,692.339" id="diagram-1-L_U_X_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_U_X_0" data-points="W3sieCI6MzE0LjU5NzY1NjI1LCJ5Ijo2MDUuNX0seyJ4IjozMTQuNTk3NjU2MjUsInkiOjY0MS43NX0seyJ4Ijo1MDcuMTE3MTg3NSwieSI6NjkzLjM3NTEwNDc0ODEwNzR9XQ==" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M613.78,678L617.671,671.958C621.563,665.917,629.346,653.833,633.237,637.375C637.129,620.917,637.129,600.083,637.129,579.25C637.129,558.417,637.129,537.583,637.129,514.875C637.129,492.167,637.129,467.583,637.129,443C637.129,418.417,637.129,393.833,637.129,371.125C637.129,348.417,637.129,327.583,637.129,304.875C637.129,282.167,637.129,257.583,594.65,235.69C552.172,213.797,467.214,194.594,424.736,184.992L382.257,175.391" id="diagram-1-L_X_L_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_X_L_0" data-points="W3sieCI6NjEzLjc3OTUyODYwMTY5NDksInkiOjY3OH0seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjY0MS43NX0seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjU3OS4yNX0seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjUxNi43NX0seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjQ0M30seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjM2OS4yNX0seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjMwNi43NX0seyJ4Ijo2MzcuMTI4OTA2MjUsInkiOjIzM30seyJ4IjozNzguMzU1NDY4NzUsInkiOjE3NC41MDg5MjUxNTA4NDc2M31d" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M248.999,185.5L230.346,193.417C211.693,201.333,174.388,217.167,155.735,237.375C137.082,257.583,137.082,282.167,137.082,304.875C137.082,327.583,137.082,348.417,135.526,364.234C133.969,380.052,130.856,390.854,129.299,396.255L127.743,401.656" id="diagram-1-L_L_P_0" class="edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_L_P_0" data-points="W3sieCI6MjQ4Ljk5ODg3NDQ3MDMzOSwieSI6MTg1LjV9LHsieCI6MTM3LjA4MjAzMTI1LCJ5IjoyMzN9LHsieCI6MTM3LjA4MjAzMTI1LCJ5IjozMDYuNzV9LHsieCI6MTM3LjA4MjAzMTI1LCJ5IjozNjkuMjV9LHsieCI6MTI2LjYzNTE5NTk3NDU3NjI4LCJ5Ijo0MDUuNX1d" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M314.598,553L314.598,546.958C314.598,540.917,314.598,528.833,314.598,510.5C314.598,492.167,314.598,467.583,314.598,443C314.598,418.417,314.598,393.833,314.598,376.167C314.598,358.5,314.598,347.75,314.598,342.375L314.598,337" id="diagram-1-L_U_R_0" class="edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_U_R_0" data-points="W3sieCI6MzE0LjU5NzY1NjI1LCJ5Ijo1NTN9LHsieCI6MzE0LjU5NzY1NjI1LCJ5Ijo1MTYuNzV9LHsieCI6MzE0LjU5NzY1NjI1LCJ5Ijo0NDN9LHsieCI6MzE0LjU5NzY1NjI1LCJ5IjozNjkuMjV9LHsieCI6MzE0LjU5NzY1NjI1LCJ5IjozMzN9XQ==" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M374.605,323.234L402.525,330.903C430.444,338.573,486.283,353.911,514.202,373.872C542.121,393.833,542.121,418.417,542.121,443C542.121,467.583,542.121,492.167,542.121,514.875C542.121,537.583,542.121,558.417,542.121,579.25C542.121,600.083,542.121,620.917,545.652,636.815C549.182,652.712,556.243,663.675,559.774,669.156L563.304,674.637" id="diagram-1-L_R_X_0" class="edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_R_X_0" data-points="W3sieCI6Mzc0LjYwNTQ2ODc1LCJ5IjozMjMuMjMzOTY0NTY0MDkwMjN9LHsieCI6NTQyLjEyMTA5Mzc1LCJ5IjozNjkuMjV9LHsieCI6NTQyLjEyMTA5Mzc1LCJ5Ijo0NDN9LHsieCI6NTQyLjEyMTA5Mzc1LCJ5Ijo1MTYuNzV9LHsieCI6NTQyLjEyMTA5Mzc1LCJ5Ijo1NzkuMjV9LHsieCI6NTQyLjEyMTA5Mzc1LCJ5Ijo2NDEuNzV9LHsieCI6NTY1LjQ3MDQ3MTM5ODMwNTEsInkiOjY3OH1d" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M662.089,678L673.763,671.958C685.438,665.917,708.787,653.833,720.462,637.375C732.137,620.917,732.137,600.083,732.137,579.25C732.137,558.417,732.137,537.583,732.137,514.875C732.137,492.167,732.137,467.583,732.137,443C732.137,418.417,732.137,393.833,732.137,371.125C732.137,348.417,732.137,327.583,732.137,304.875C732.137,282.167,732.137,257.583,732.137,233C732.137,208.417,732.137,183.833,732.137,161.125C732.137,138.417,732.137,117.583,695.909,98.896C659.681,80.209,587.226,63.668,550.998,55.398L514.771,47.127" id="diagram-1-L_X_N_0" class="edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_X_N_0" data-points="W3sieCI6NjYyLjA4ODU4NTgwNTA4NDgsInkiOjY3OH0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjY0MS43NX0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjU3OS4yNX0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjUxNi43NX0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjQ0M30seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjM2OS4yNX0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjMwNi43NX0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjIzM30seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjE1OS4yNX0seyJ4Ijo3MzIuMTM2NzE4NzUsInkiOjk2Ljc1fSx7IngiOjUxMC44NzEwOTM3NSwieSI6NDYuMjM3MDU4NzU2Mzg1MDF9XQ==" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/><path d="M367.105,557.003L382.94,550.294C398.775,543.586,430.444,530.168,446.279,511.167C462.113,492.167,462.113,467.583,462.113,443C462.113,418.417,462.113,393.833,462.113,371.125C462.113,348.417,462.113,327.583,462.113,304.875C462.113,282.167,462.113,257.583,462.113,233C462.113,208.417,462.113,183.833,462.113,161.125C462.113,138.417,462.113,117.583,461.791,101.79C461.468,85.998,460.823,75.245,460.5,69.869L460.178,64.493" id="diagram-1-L_U_N_0" class="edge-thickness-normal edge-pattern-dotted edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_U_N_0" data-points="W3sieCI6MzY3LjEwNTQ2ODc1LCJ5Ijo1NTcuMDAzMjgzNTUwNDcxM30seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjUxNi43NX0seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjQ0M30seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjM2OS4yNX0seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjMwNi43NX0seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjIzM30seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjE1OS4yNX0seyJ4Ijo0NjIuMTEzMjgxMjUsInkiOjk2Ljc1fSx7IngiOjQ1OS45MzgyODEyNSwieSI6NjAuNX1d" data-look="classic" marker-end="url(#diagram-1_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel" transform="translate(310.84765625, 96.75)"><g class="label" data-id="L_N_L_0" transform="translate(-45.6015625, -11.25)"><foreignObject width="91.203125" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>插入耗材 0.5s</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(314.59765625, 233)"><g class="label" data-id="L_L_R_0" transform="translate(-58.5546875, -22.5)"><foreignObject width="117.109375" height="45"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>就绪开关<br />（或 FULL 兜底）</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(160.64358, 352.02562)"><g class="label" data-id="L_R_P_0" transform="translate(-15.0078125, -11.25)"><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>黑键</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(115.828125, 516.75)"><g class="label" data-id="L_P_U_0" transform="translate(-15.0078125, -11.25)"><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>黑键</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(314.59765625, 641.75)"><g class="label" data-id="L_U_X_0" transform="translate(-64.765625, -11.25)"><foreignObject width="129.53125" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>退过就绪开关 +0.3s</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(637.12890625, 443)"><g class="label" data-id="L_X_L_0" transform="translate(-75.0078125, -11.25)"><foreignObject width="150.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>黑键：吸料后直接打印</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(137.08203125, 306.75)"><g class="label" data-id="L_L_P_0" transform="translate(-82.5078125, -11.25)"><foreignObject width="165.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>吸料中按过黑键，到位后</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(314.59765625, 443)"><g class="label" data-id="L_U_R_0" transform="translate(-30.0078125, -11.25)"><foreignObject width="60.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>黑键取消</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(542.12109375, 516.75)"><g class="label" data-id="L_R_X_0" transform="translate(-60.0078125, -11.25)"><foreignObject width="120.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>往外抽过就绪开关</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(732.13671875, 369.25)"><g class="label" data-id="L_X_N_0" transform="translate(-30.0078125, -11.25)"><foreignObject width="60.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>完全抽出</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(462.11328125, 306.75)"><g class="label" data-id="L_U_N_0" transform="translate(-52.5078125, -11.25)"><foreignObject width="105.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>耗材已完全退出</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="diagram-1-flowchart-N-0" data-look="classic" transform="translate(458.36328125, 34.25)"><rect class="basic label-container" style="" x="-52.5078125" y="-26.25" width="105.015625" height="52.5"/><g class="label" style="" transform="translate(-22.5078125, -11.25)"><rect/><foreignObject width="45.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>无耗材</p></span></div></foreignObject></g></g><g class="node default" id="diagram-1-flowchart-L-1" data-look="classic" transform="translate(310.84765625, 159.25)"><rect class="basic label-container" style="" x="-67.5078125" y="-26.25" width="135.015625" height="52.5"/><g class="label" style="" transform="translate(-37.5078125, -11.25)"><rect/><foreignObject width="75.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>耗材吸入中</p></span></div></foreignObject></g></g><g class="node default" id="diagram-1-flowchart-R-3" data-look="classic" transform="translate(314.59765625, 306.75)"><rect class="basic label-container" style="" x="-60.0078125" y="-26.25" width="120.015625" height="52.5"/><g class="label" style="" transform="translate(-30.0078125, -11.25)"><rect/><foreignObject width="60.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>耗材就绪</p></span></div></foreignObject></g></g><g class="node default" id="diagram-1-flowchart-P-5" data-look="classic" transform="translate(115.828125, 443)"><rect class="basic label-container" style="" x="-107.828125" y="-37.5" width="215.65625" height="75"/><g class="label" style="" transform="translate(-77.828125, -22.5)"><rect/><foreignObject width="155.65625" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>打印中<br />EMPTY 补料 · FULL 停</p></span></div></foreignObject></g></g><g class="node default" id="diagram-1-flowchart-U-7" data-look="classic" transform="translate(314.59765625, 579.25)"><rect class="basic label-container" style="" x="-52.5078125" y="-26.25" width="105.015625" height="52.5"/><g class="label" style="" transform="translate(-22.5078125, -11.25)"><rect/><foreignObject width="45.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>退料中</p></span></div></foreignObject></g></g><g class="node default" id="diagram-1-flowchart-X-9" data-look="classic" transform="translate(589.625, 715.5)"><rect class="basic label-container" style="" x="-82.5078125" y="-37.5" width="165.015625" height="75"/><g class="label" style="" transform="translate(-52.5078125, -22.5)"><rect/><foreignObject width="105.015625" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>已退料<br />耗材留在进料口</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="diagram-1-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><defs><filter id="diagram-1-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><linearGradient id="diagram-1-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="hsl(0, 0%, 83.3333333333%)" stop-opacity="1"/><stop offset="100%" stop-color="hsl(0, 0%, 88.9215686275%)" stop-opacity="1"/></linearGradient></svg></figure>
+<p>实线是正常使用流程，虚线是特殊情况。图里没有画出以下几种转换，见下表：</p>
+<ul>
+<li><strong>紧急停止</strong>：任何状态下按红色按钮，或者任一阶段超时，都会进入紧急停止；再按一次红色按钮回到进入前的状态。</li>
+<li><strong>上电初始状态</strong>：就绪开关有耗材进入"耗材就绪"，只有进料口有耗材进入"已退料"，都没有进入"无耗材"。</li>
+<li>其它少见的转换：吸入中耗材被抽出回到无耗材；就绪时耗材被完全抽出回到无耗材；已退料时手动把耗材推到就绪开关进入就绪。</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>电机</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>无耗材</td>
+<td>停</td>
+<td>要先看到进料口为空，下一次插入才会触发自动吸入，防止用户往外抽料时被电机吸回去</td>
+</tr>
+<tr>
+<td>耗材吸入中</td>
+<td>正转，吸入速度</td>
+<td>就绪开关触发即停。FULL 霍尔只有在吸入过程中<strong>新触发</strong>才算就绪，防止滑块本来就停在 FULL 造成误判。超时 30 秒</td>
+</tr>
+<tr>
+<td>耗材就绪</td>
+<td>停</td>
+<td>等待黑色按钮</td>
+</tr>
+<tr>
+<td>打印中</td>
+<td>补料时正转，补料速度</td>
+<td>进入后先送到 FULL，首次超时 120 秒。之后 EMPTY 触发开始补料、FULL 触发停止，每次超时 30 秒。两颗霍尔同时有效时以 FULL 为准。两个开关都没耗材时停止补料，备注"耗材已用尽"；换上新耗材后延时 0.5 秒，按首次送料超时重新送到满</td>
+</tr>
+<tr>
+<td>退料中</td>
+<td>反转，退料速度</td>
+<td>就绪开关松开后再退 <code>unload_extra_ms</code> 就停，进入"已退料"。如果退料全程就绪开关都没触发过（开关失效），就一直退到进料口也为空。超时 90 秒。退料中按黑键可以取消</td>
+</tr>
+<tr>
+<td>已退料</td>
+<td>停</td>
+<td>耗材停在进料口里，按黑键会重新吸料并开始打印</td>
+</tr>
+<tr>
+<td>紧急停止</td>
+<td>停</td>
+<td>只响应红键（恢复）和长按重启，备注里显示原因，例如"送料超时"</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="44-传感器与按键">4.4 传感器与按键</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>输入</th>
+<th>消抖</th>
+<th>判断方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>霍尔 EMPTY / FULL</td>
+<td>连续 2 次一致（20ms）</td>
+<td>电平</td>
+</tr>
+<tr>
+<td>微动开关 IN / READY</td>
+<td>连续 5 次一致（50ms）</td>
+<td>电平</td>
+</tr>
+<tr>
+<td>黑色按钮</td>
+<td>40ms</td>
+<td><strong>松开时</strong>触发短按。按住超过 3 秒后松开 = 重启</td>
+</tr>
+<tr>
+<td>红色按钮</td>
+<td>40ms</td>
+<td><strong>按下瞬间</strong>触发，急停要越快越好。按住超过 3 秒后松开 = 重启</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>为什么不会再漏检：</strong> 状态机每 10ms 读取一次各传感器的稳定电平，并据此做决定，例如"打印中且 FULL 有效就停止补料"。它不记录"发生过什么边沿"，所以不存在丢边沿的问题。即使某次变化没赶上，下一个 10ms 也会按实际电平纠正。</p>
+<p>DRV5032 自身每 50ms 采样一次，最多带来 50ms 的延迟，对缓冲器来说没有影响。</p>
+<p>上电时已经按着的按键会被忽略，要等松开后才开始识别。</p>
+<h3 id="45-电机控制">4.5 电机控制</h3>
+<p>DRV8870 真值表：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>IN1</th>
+<th>IN2</th>
+<th>动作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>滑行（同时进入低功耗）</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>物理正向</td>
+</tr>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>物理反向</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>刹车</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>调速方式：慢衰减 PWM。</strong> 一路保持高电平，另一路输出反相 PWM，电机在"驱动"和"刹车"之间切换。低速时的力矩和线性比滑行方式好。PWM 频率 5kHz，占空比分辨率 1%。</li>
+<li><strong>起步</strong>：从 25% 占空比开始，每 10ms 增加 3%，直到目标速度。</li>
+<li><strong>停止</strong>：先刹车 150ms 再滑行，送料停得干脆。</li>
+<li><strong>换向</strong>：必须先经过刹车，不会直接反转。</li>
+<li><strong>方向反转设置</strong>（<code>motor_invert</code>）：只在电机完全停下后才生效。</li>
+<li><strong>引脚写入顺序</strong>：先写固定电平的脚，再写 PWM 脚，避免切换瞬间出现反向脉冲。</li>
+</ul>
+<h3 id="46-网络">4.6 网络</h3>
+<figure class="diagram"><svg id="diagram-2" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 534.469px; background-color: white;" viewBox="0 0 534.46875 823.671875" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#diagram-2{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;fill:#000000;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#diagram-2 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#diagram-2 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#diagram-2 .error-icon{fill:#552222;}#diagram-2 .error-text{fill:#552222;stroke:#552222;}#diagram-2 .edge-thickness-normal{stroke-width:1px;}#diagram-2 .edge-thickness-thick{stroke-width:3.5px;}#diagram-2 .edge-pattern-solid{stroke-dasharray:0;}#diagram-2 .edge-thickness-invisible{stroke-width:0;fill:none;}#diagram-2 .edge-pattern-dashed{stroke-dasharray:3;}#diagram-2 .edge-pattern-dotted{stroke-dasharray:2;}#diagram-2 .marker{fill:#666;stroke:#666;}#diagram-2 .marker.cross{stroke:#666;}#diagram-2 svg{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;}#diagram-2 p{margin:0;}#diagram-2 .label{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;color:#000000;}#diagram-2 .cluster-label text{fill:#333;}#diagram-2 .cluster-label span{color:#333;}#diagram-2 .cluster-label span p{background-color:transparent;}#diagram-2 .label text,#diagram-2 span{fill:#000000;color:#000000;}#diagram-2 .node rect,#diagram-2 .node circle,#diagram-2 .node ellipse,#diagram-2 .node polygon,#diagram-2 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#diagram-2 .rough-node .label text,#diagram-2 .node .label text,#diagram-2 .image-shape .label,#diagram-2 .icon-shape .label{text-anchor:middle;}#diagram-2 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram-2 .rough-node .label,#diagram-2 .node .label,#diagram-2 .image-shape .label,#diagram-2 .icon-shape .label{text-align:center;}#diagram-2 .node.clickable{cursor:pointer;}#diagram-2 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#diagram-2 .arrowheadPath{fill:#333333;}#diagram-2 .edgePath .path{stroke:#666;stroke-width:1px;}#diagram-2 .flowchart-link{stroke:#666;fill:none;}#diagram-2 .edgeLabel{background-color:white;text-align:center;}#diagram-2 .edgeLabel p{background-color:white;}#diagram-2 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#diagram-2 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#diagram-2 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#diagram-2 .cluster text{fill:#333;}#diagram-2 .cluster span{color:#333;}#diagram-2 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#diagram-2 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#diagram-2 rect.text{fill:none;stroke-width:0;}#diagram-2 .icon-shape,#diagram-2 .image-shape{background-color:white;text-align:center;}#diagram-2 .icon-shape p,#diagram-2 .image-shape p{background-color:white;padding:2px;}#diagram-2 .icon-shape .label rect,#diagram-2 .image-shape .label rect{opacity:0.5;background-color:white;fill:white;}#diagram-2 .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#diagram-2 .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#diagram-2 .node .neo-node{stroke:#999;}#diagram-2 [data-look="neo"].node rect,#diagram-2 [data-look="neo"].cluster rect,#diagram-2 [data-look="neo"].node polygon{stroke:url(#diagram-2-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-2 [data-look="neo"].swimlane.cluster rect{filter:none;}#diagram-2 [data-look="neo"].node path{stroke:url(#diagram-2-gradient);stroke-width:1px;}#diagram-2 [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-2 [data-look="neo"].node .neo-line path{stroke:#999;filter:none;}#diagram-2 [data-look="neo"].node circle{stroke:url(#diagram-2-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-2 [data-look="neo"].node circle .state-start{fill:#000000;}#diagram-2 [data-look="neo"].icon-shape .icon{fill:url(#diagram-2-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-2 [data-look="neo"].icon-shape .icon-neo path{stroke:url(#diagram-2-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-2 :root{--mermaid-font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;}</style><g><marker id="diagram-2_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-2_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"/></marker><marker id="diagram-2_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"/></marker><g class="root"><g class="clusters"/><g class="edgePaths"><path d="M228.055,60.5L228.055,64.667C228.055,68.833,228.055,77.167,228.055,84.833C228.055,92.5,228.055,99.5,228.055,103L228.055,106.5" id="diagram-2-L_S_Q_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S_Q_0" data-points="W3sieCI6MjI4LjA1NDY4NzUsInkiOjYwLjV9LHsieCI6MjI4LjA1NDY4NzUsInkiOjg1LjV9LHsieCI6MjI4LjA1NDY4NzUsInkiOjExMC41fV0=" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M273.566,202.66L300.155,216.287C326.745,229.914,379.923,257.168,406.512,283.087C433.102,309.005,433.102,333.589,433.102,358.172C433.102,382.755,433.102,407.339,433.102,430.047C433.102,452.755,433.102,473.589,433.102,494.422C433.102,515.255,433.102,536.089,433.102,551.88C433.102,567.672,433.102,578.422,433.102,583.797L433.102,589.172" id="diagram-2-L_Q_P1_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_Q_P1_0" data-points="W3sieCI6MjczLjU2NjEzNzEyMTUwNzk1LCJ5IjoyMDIuNjYwNDI1Mzc4NDkyMDh9LHsieCI6NDMzLjEwMTU2MjUsInkiOjI4NC40MjE4NzV9LHsieCI6NDMzLjEwMTU2MjUsInkiOjM1OC4xNzE4NzV9LHsieCI6NDMzLjEwMTU2MjUsInkiOjQzMS45MjE4NzV9LHsieCI6NDMzLjEwMTU2MjUsInkiOjQ5NC40MjE4NzV9LHsieCI6NDMzLjEwMTU2MjUsInkiOjU1Ni45MjE4NzV9LHsieCI6NDMzLjEwMTU2MjUsInkiOjU5My4xNzE4NzV9XQ==" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M187.343,207.46L168.775,220.287C150.206,233.114,113.07,258.768,94.502,276.97C75.934,295.172,75.934,305.922,75.934,311.297L75.934,316.672" id="diagram-2-L_Q_C_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_Q_C_0" data-points="W3sieCI6MTg3LjM0Mjc0NDA4NjQ5MSwieSI6MjA3LjQ1OTkzMTU4NjQ5MX0seyJ4Ijo3NS45MzM1OTM3NSwieSI6Mjg0LjQyMTg3NX0seyJ4Ijo3NS45MzM1OTM3NSwieSI6MzIwLjY3MTg3NX1d" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M49.022,395.672L44.686,401.714C40.351,407.755,31.679,419.839,27.344,436.297C23.008,452.755,23.008,473.589,23.008,494.422C23.008,515.255,23.008,536.089,23.008,558.797C23.008,581.505,23.008,606.089,23.008,630.672C23.008,655.255,23.008,679.839,35.817,697.898C48.627,715.958,74.246,727.494,87.056,733.262L99.865,739.03" id="diagram-2-L_C_ON_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_ON_0" data-points="W3sieCI6NDkuMDIyMTc5NTU1MDg0NzUsInkiOjM5NS42NzE4NzV9LHsieCI6MjMuMDA3ODEyNSwieSI6NDMxLjkyMTg3NX0seyJ4IjoyMy4wMDc4MTI1LCJ5Ijo0OTQuNDIxODc1fSx7IngiOjIzLjAwNzgxMjUsInkiOjU1Ni45MjE4NzV9LHsieCI6MjMuMDA3ODEyNSwieSI6NjMwLjY3MTg3NX0seyJ4IjoyMy4wMDc4MTI1LCJ5Ijo3MDQuNDIxODc1fSx7IngiOjEwMy41MTIzODA4MjYyNzExOCwieSI6NzQwLjY3MTg3NX1d" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M124.253,395.672L132.037,401.714C139.822,407.755,155.391,419.839,163.176,431.255C170.961,442.672,170.961,453.422,170.961,458.797L170.961,464.172" id="diagram-2-L_C_OFF_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_OFF_0" data-points="W3sieCI6MTI0LjI1MjU4MjA5NzQ1NzYzLCJ5IjozOTUuNjcxODc1fSx7IngiOjE3MC45NjA5Mzc1LCJ5Ijo0MzEuOTIxODc1fSx7IngiOjE3MC45NjA5Mzc1LCJ5Ijo0NjguMTcxODc1fV0=" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M123.524,520.672L112.606,526.714C101.688,532.755,79.852,544.839,68.934,563.172C58.016,581.505,58.016,606.089,58.016,630.672C58.016,655.255,58.016,679.839,67.987,697.841C77.958,715.843,97.9,727.263,107.871,732.974L117.842,738.684" id="diagram-2-L_OFF_ON_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_OFF_ON_0" data-points="W3sieCI6MTIzLjUyMzkwNjI1MDAwMDAxLCJ5Ijo1MjAuNjcxODc1fSx7IngiOjU4LjAxNTYyNSwieSI6NTU2LjkyMTg3NX0seyJ4Ijo1OC4wMTU2MjUsInkiOjYzMC42NzE4NzV9LHsieCI6NTguMDE1NjI1LCJ5Ijo3MDQuNDIxODc1fSx7IngiOjEyMS4zMTI5NjM0NTMzODk4MywieSI6NzQwLjY3MTg3NX1d" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M164.658,520.672L163.207,526.714C161.756,532.755,158.855,544.839,161.802,556.4C164.749,567.962,173.545,579.003,177.943,584.523L182.342,590.043" id="diagram-2-L_OFF_P2_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_OFF_P2_0" data-points="W3sieCI6MTY0LjY1NzY1NjI1LCJ5Ijo1MjAuNjcxODc1fSx7IngiOjE1NS45NTMxMjUsInkiOjU1Ni45MjE4NzV9LHsieCI6MTg0LjgzNDA4MzY4NjQ0MDcsInkiOjU5My4xNzE4NzV9XQ==" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M214.711,668.172L214.711,674.214C214.711,680.255,214.711,692.339,212.66,703.798C210.609,715.258,206.507,726.095,204.456,731.513L202.405,736.931" id="diagram-2-L_P2_ON_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_P2_ON_0" data-points="W3sieCI6MjE0LjcxMDkzNzUsInkiOjY2OC4xNzE4NzV9LHsieCI6MjE0LjcxMDkzNzUsInkiOjcwNC40MjE4NzV9LHsieCI6MjAwLjk4ODU0NjA4MDUwODQ4LCJ5Ijo3NDAuNjcxODc1fV0=" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M253.284,593.172L259.498,587.13C265.712,581.089,278.141,569.005,273.384,557.231C268.628,545.456,246.685,533.99,235.713,528.257L224.742,522.524" id="diagram-2-L_P2_OFF_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_P2_OFF_0" data-points="W3sieCI6MjUzLjI4MzUwMTA1OTMyMjAyLCJ5Ijo1OTMuMTcxODc1fSx7IngiOjI5MC41NzAzMTI1LCJ5Ijo1NTYuOTIxODc1fSx7IngiOjIyMS4xOTY4NzUsInkiOjUyMC42NzE4NzV9XQ==" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/><path d="M433.102,668.172L433.102,674.214C433.102,680.255,433.102,692.339,409.635,705.406C386.169,718.474,339.237,732.527,315.771,739.553L292.305,746.579" id="diagram-2-L_P1_ON_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_P1_ON_0" data-points="W3sieCI6NDMzLjEwMTU2MjUsInkiOjY2OC4xNzE4NzV9LHsieCI6NDMzLjEwMTU2MjUsInkiOjcwNC40MjE4NzV9LHsieCI6Mjg4LjQ3MjY1NjI1LCJ5Ijo3NDcuNzI2ODI3MDI2MDA5fV0=" data-look="classic" marker-end="url(#diagram-2_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_S_Q_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(433.1015625, 431.921875)"><g class="label" data-id="L_Q_P1_0" transform="translate(-7.5078125, -11.25)"><foreignObject width="15.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>否</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(75.93359375, 284.421875)"><g class="label" data-id="L_Q_C_0" transform="translate(-7.5078125, -11.25)"><foreignObject width="15.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>是</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(23.0078125, 556.921875)"><g class="label" data-id="L_C_ON_0" transform="translate(-15.0078125, -11.25)"><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>成功</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(170.9609375, 431.921875)"><g class="label" data-id="L_C_OFF_0" transform="translate(-15.0078125, -11.25)"><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>失败</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(58.015625, 630.671875)"><g class="label" data-id="L_OFF_ON_0" transform="translate(-15.0078125, -11.25)"><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>连上</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(158.77837, 560.46798)"><g class="label" data-id="L_OFF_P2_0" transform="translate(-50.84375, -11.25)"><foreignObject width="101.6875" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>3 分钟仍连不上</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(214.7109375, 704.421875)"><g class="label" data-id="L_P2_ON_0" transform="translate(-30.0078125, -11.25)"><foreignObject width="60.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>配网成功</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(290.5703125, 556.921875)"><g class="label" data-id="L_P2_OFF_0" transform="translate(-15.0078125, -11.25)"><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>超时</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(433.1015625, 704.421875)"><g class="label" data-id="L_P1_ON_0" transform="translate(-30.0078125, -11.25)"><foreignObject width="60.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>配网成功</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="diagram-2-flowchart-S-0" data-look="classic" transform="translate(228.0546875, 34.25)"><rect class="basic label-container" style="" x="-45.0078125" y="-26.25" width="90.015625" height="52.5"/><g class="label" style="" transform="translate(-15.0078125, -11.25)"><rect/><foreignObject width="30.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>上电</p></span></div></foreignObject></g></g><g class="node default" id="diagram-2-flowchart-Q-1" data-look="classic" transform="translate(228.0546875, 179.3359375)"><polygon points="68.8359375,0 137.671875,-68.8359375 68.8359375,-137.671875 0,-68.8359375" class="label-container" transform="translate(-68.3359375, 68.8359375)"/><g class="label" style="" transform="translate(-42.5859375, -11.25)"><rect/><foreignObject width="85.171875" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>保存过 WiFi?</p></span></div></foreignObject></g></g><g class="node default" id="diagram-2-flowchart-P1-3" data-look="classic" transform="translate(433.1015625, 630.671875)"><rect class="basic label-container" style="" x="-93.3671875" y="-37.5" width="186.734375" height="75"/><g class="label" style="" transform="translate(-63.3671875, -22.5)"><rect/><foreignObject width="126.734375" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>开 SEMI-AMS 热点<br />不限时 · 蓝灯快闪</p></span></div></foreignObject></g></g><g class="node default" id="diagram-2-flowchart-C-5" data-look="classic" transform="translate(75.93359375, 358.171875)"><rect class="basic label-container" style="" x="-64.1875" y="-37.5" width="128.375" height="75"/><g class="label" style="" transform="translate(-34.1875, -22.5)"><rect/><foreignObject width="68.375" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>连接 15 秒<br />蓝灯慢闪</p></span></div></foreignObject></g></g><g class="node default" id="diagram-2-flowchart-ON-7" data-look="classic" transform="translate(186.79296875, 778.171875)"><rect class="basic label-container" style="" x="-101.6796875" y="-37.5" width="203.359375" height="75"/><g class="label" style="" transform="translate(-71.6796875, -22.5)"><rect/><foreignObject width="143.359375" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>已连接 · 蓝灯常亮<br />启动点灯 / 网页 / OTA</p></span></div></foreignObject></g></g><g class="node default" id="diagram-2-flowchart-OFF-9" data-look="classic" transform="translate(170.9609375, 494.421875)"><rect class="basic label-container" style="" x="-100.8671875" y="-26.25" width="201.734375" height="52.5"/><g class="label" style="" transform="translate(-70.8671875, -11.25)"><rect/><foreignObject width="141.734375" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>后台重连 · 蓝灯慢闪</p></span></div></foreignObject></g></g><g class="node default" id="diagram-2-flowchart-P2-13" data-look="classic" transform="translate(214.7109375, 630.671875)"><rect class="basic label-container" style="" x="-75.0234375" y="-37.5" width="150.046875" height="75"/><g class="label" style="" transform="translate(-45.0234375, -22.5)"><rect/><foreignObject width="90.046875" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>开热点 5 分钟<br />蓝灯快闪</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="diagram-2-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><defs><filter id="diagram-2-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><linearGradient id="diagram-2-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="hsl(0, 0%, 83.3333333333%)" stop-opacity="1"/><stop offset="100%" stop-color="hsl(0, 0%, 88.9215686275%)" stop-opacity="1"/></linearGradient></svg></figure>
+<ul>
+<li><strong>配网</strong>：WiFiManager 2.0.17，以非阻塞模式运行，配网期间按键和送料照常工作。如果之前配过网（例如停电后路由器启动慢），先在后台重连 3 分钟，不急着开热点。</li>
+<li><strong>点灯 Blinker</strong>：</li>
+<li>控件 key 和原厂一致，见 8.3 节。</li>
+<li>App 打开或发送心跳时，刷新全部控件。</li>
+<li>状态变化时主动推送，最小间隔 1.5 秒，多次变化合并成一条，以满足点灯"设备每秒最多 1 条"的限制。</li>
+<li>点灯库在 ESP8266 上默认不使用 SSL（<code>BLINKER_WITHOUT_SSL</code>），这样内存占用小、阻塞时间短。</li>
+<li>点灯库的 <code>begin()</code> 会重新连接一次 WiFi，并把 DHCP 主机名改掉，固件随后会把主机名改回 <code>semi-ams</code>。</li>
+<li><strong>mDNS</strong>：点灯库会用它自己的设备名注册 mDNS。所以设置了点灯密钥后，网页和 OTA 请用 IP 访问；没设置时可以用 <code>semi-ams.local</code>。</li>
+<li><strong>设备网页</strong>：<code>http://设备IP/</code>。可以查看状态、传感器和日志，执行开始/急停/点动/重启，修改参数，重置配网，以及打开升级入口。接口见 8.2 节。</li>
+<li><strong>固件升级</strong>：</li>
+<li>网页升级：<code>/update</code>，用户名 <code>admin</code>，密码 <code>semi-ams</code>。</li>
+<li>PlatformIO 无线升级：<code>pio run -e ota -t upload</code>。</li>
+<li>升级开始时状态机强制进入紧急停止。</li>
+</ul>
+<h3 id="47-参数与存储">4.7 参数与存储</h3>
+<p>参数保存在 LittleFS 的 <code>/settings.txt</code> 中，格式为每行一个 <code>key=value</code>。点灯密钥也存在这个文件里，WiFi 账号密码由 ESP8266 SDK 自己保存。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认</th>
+<th>范围</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>load_speed</code></td>
+<td>50</td>
+<td>10–100 %</td>
+<td>吸入速度</td>
+</tr>
+<tr>
+<td><code>feed_speed</code></td>
+<td>60</td>
+<td>10–100 %</td>
+<td>打印补料速度，网页点动也用这个速度</td>
+</tr>
+<tr>
+<td><code>unload_speed</code></td>
+<td>60</td>
+<td>10–100 %</td>
+<td>退料速度</td>
+</tr>
+<tr>
+<td><code>motor_invert</code></td>
+<td>0</td>
+<td>0/1</td>
+<td>电机方向反转</td>
+</tr>
+<tr>
+<td><code>insert_delay_ms</code></td>
+<td>500</td>
+<td>0–5000</td>
+<td>插入耗材后多久开始吸入</td>
+</tr>
+<tr>
+<td><code>load_timeout_s</code></td>
+<td>30</td>
+<td>3–600</td>
+<td>吸入超时</td>
+</tr>
+<tr>
+<td><code>first_feed_timeout_s</code></td>
+<td>120</td>
+<td>5–900</td>
+<td>开始打印或换料后，首次送到满的超时</td>
+</tr>
+<tr>
+<td><code>feed_timeout_s</code></td>
+<td>30</td>
+<td>3–600</td>
+<td>打印中每次补料的超时</td>
+</tr>
+<tr>
+<td><code>unload_timeout_s</code></td>
+<td>90</td>
+<td>5–900</td>
+<td>退料超时</td>
+</tr>
+<tr>
+<td><code>unload_extra_ms</code></td>
+<td>300</td>
+<td>0–10000</td>
+<td>退料时离开就绪开关后再多退的时间</td>
+</tr>
+</tbody>
+</table></div>
+<p>不常改的常量在 <code>include/config.h</code> 中，包括：PWM 频率、起步占空比、刹车时间、长按时间、消抖次数、热点名称和密码、OTA 密码、重连和热点时长。</p>
+<h3 id="48-安全机制">4.8 安全机制</h3>
+<ul>
+<li><strong>超时保护</strong>：吸入、首次送料、补料、退料都有超时，超时后进入紧急停止，并在备注里显示原因。</li>
+<li><strong>升级保护</strong>：通过网页或 OTA 升级时，强制紧急停止。</li>
+<li><strong>重启保护</strong>：所有重启都先停电机。如果 <code>loop()</code> 被网络卡住超过 5 秒，tick 会直接执行重启。</li>
+<li><strong>上电保护</strong>：上电或重启后不转电机。</li>
+<li><strong>方向保护</strong>：电机运行中修改方向设置不会立即生效，换向一定先经过刹车。</li>
+</ul>
+<h3 id="49-与原固件的差异">4.9 与原固件的差异</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方面</th>
+<th>原固件</th>
+<th>本固件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>传感器</td>
+<td>中断 + 边沿</td>
+<td>10ms 电平轮询</td>
+</tr>
+<tr>
+<td>电机控制所在</td>
+<td>主循环</td>
+<td>独立的 10ms 定时器</td>
+</tr>
+<tr>
+<td>退料</td>
+<td>退完（推测为退出进料口）</td>
+<td>退到就绪开关后停，耗材留在进料口；按黑键重新吸料并开始打印</td>
+</tr>
+<tr>
+<td>超时保护</td>
+<td>不明</td>
+<td>各阶段都有</td>
+</tr>
+<tr>
+<td>配网</td>
+<td>AsyncWiFiManager，连不上就重启</td>
+<td>WiFiManager 非阻塞，配网时设备照常工作</td>
+</tr>
+<tr>
+<td>调参与调试</td>
+<td>无</td>
+<td>网页、串口、点动、日志</td>
+</tr>
+<tr>
+<td>状态</td>
+<td>5 个</td>
+<td>7 个（新增退料中、已退料）</td>
+</tr>
+<tr>
+<td>MQTT / TPU</td>
+<td>有对应版本</td>
+<td>不支持</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="5-在-mac-上开发编译烧录测试">5. 在 Mac 上开发、编译、烧录、测试</h2>
+<figure class="diagram"><svg id="diagram-3" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 563.5px; background-color: white;" viewBox="0 0 563.5 753.125" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#diagram-3{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;fill:#000000;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#diagram-3 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#diagram-3 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#diagram-3 .error-icon{fill:#552222;}#diagram-3 .error-text{fill:#552222;stroke:#552222;}#diagram-3 .edge-thickness-normal{stroke-width:1px;}#diagram-3 .edge-thickness-thick{stroke-width:3.5px;}#diagram-3 .edge-pattern-solid{stroke-dasharray:0;}#diagram-3 .edge-thickness-invisible{stroke-width:0;fill:none;}#diagram-3 .edge-pattern-dashed{stroke-dasharray:3;}#diagram-3 .edge-pattern-dotted{stroke-dasharray:2;}#diagram-3 .marker{fill:#666;stroke:#666;}#diagram-3 .marker.cross{stroke:#666;}#diagram-3 svg{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:15px;}#diagram-3 p{margin:0;}#diagram-3 .label{font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;color:#000000;}#diagram-3 .cluster-label text{fill:#333;}#diagram-3 .cluster-label span{color:#333;}#diagram-3 .cluster-label span p{background-color:transparent;}#diagram-3 .label text,#diagram-3 span{fill:#000000;color:#000000;}#diagram-3 .node rect,#diagram-3 .node circle,#diagram-3 .node ellipse,#diagram-3 .node polygon,#diagram-3 .node path{fill:#eee;stroke:#999;stroke-width:1px;}#diagram-3 .rough-node .label text,#diagram-3 .node .label text,#diagram-3 .image-shape .label,#diagram-3 .icon-shape .label{text-anchor:middle;}#diagram-3 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram-3 .rough-node .label,#diagram-3 .node .label,#diagram-3 .image-shape .label,#diagram-3 .icon-shape .label{text-align:center;}#diagram-3 .node.clickable{cursor:pointer;}#diagram-3 .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#diagram-3 .arrowheadPath{fill:#333333;}#diagram-3 .edgePath .path{stroke:#666;stroke-width:1px;}#diagram-3 .flowchart-link{stroke:#666;fill:none;}#diagram-3 .edgeLabel{background-color:white;text-align:center;}#diagram-3 .edgeLabel p{background-color:white;}#diagram-3 .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#diagram-3 .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#diagram-3 .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#diagram-3 .cluster text{fill:#333;}#diagram-3 .cluster span{color:#333;}#diagram-3 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#diagram-3 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#diagram-3 rect.text{fill:none;stroke-width:0;}#diagram-3 .icon-shape,#diagram-3 .image-shape{background-color:white;text-align:center;}#diagram-3 .icon-shape p,#diagram-3 .image-shape p{background-color:white;padding:2px;}#diagram-3 .icon-shape .label rect,#diagram-3 .image-shape .label rect{opacity:0.5;background-color:white;fill:white;}#diagram-3 .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#diagram-3 .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#diagram-3 .node .neo-node{stroke:#999;}#diagram-3 [data-look="neo"].node rect,#diagram-3 [data-look="neo"].cluster rect,#diagram-3 [data-look="neo"].node polygon{stroke:url(#diagram-3-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-3 [data-look="neo"].swimlane.cluster rect{filter:none;}#diagram-3 [data-look="neo"].node path{stroke:url(#diagram-3-gradient);stroke-width:1px;}#diagram-3 [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-3 [data-look="neo"].node .neo-line path{stroke:#999;filter:none;}#diagram-3 [data-look="neo"].node circle{stroke:url(#diagram-3-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-3 [data-look="neo"].node circle .state-start{fill:#000000;}#diagram-3 [data-look="neo"].icon-shape .icon{fill:url(#diagram-3-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-3 [data-look="neo"].icon-shape .icon-neo path{stroke:url(#diagram-3-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#diagram-3 :root{--mermaid-font-family:"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;}</style><g><marker id="diagram-3_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="diagram-3_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"/></marker><marker id="diagram-3_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"/></marker><g class="root"><g class="clusters"/><g class="edgePaths"><path d="M287.375,60.5L287.375,64.667C287.375,68.833,287.375,77.167,287.375,84.833C287.375,92.5,287.375,99.5,287.375,103L287.375,106.5" id="diagram-3-L_A_B_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_A_B_0" data-points="W3sieCI6Mjg3LjM3NSwieSI6NjAuNX0seyJ4IjoyODcuMzc1LCJ5Ijo4NS41fSx7IngiOjI4Ny4zNzUsInkiOjExMC41fV0=" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/><path d="M287.375,185.5L287.375,189.667C287.375,193.833,287.375,202.167,287.375,209.833C287.375,217.5,287.375,224.5,287.375,228L287.375,231.5" id="diagram-3-L_B_C_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_B_C_0" data-points="W3sieCI6Mjg3LjM3NSwieSI6MTg1LjV9LHsieCI6Mjg3LjM3NSwieSI6MjEwLjV9LHsieCI6Mjg3LjM3NSwieSI6MjM1LjV9XQ==" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/><path d="M287.375,310.5L287.375,314.667C287.375,318.833,287.375,327.167,287.375,334.833C287.375,342.5,287.375,349.5,287.375,353L287.375,356.5" id="diagram-3-L_C_D_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_D_0" data-points="W3sieCI6Mjg3LjM3NSwieSI6MzEwLjV9LHsieCI6Mjg3LjM3NSwieSI6MzM1LjV9LHsieCI6Mjg3LjM3NSwieSI6MzYwLjV9XQ==" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/><path d="M247.623,455.373L229.352,468.04C211.082,480.707,174.541,506.041,156.27,524.083C138,542.125,138,552.875,138,558.25L138,563.625" id="diagram-3-L_D_E_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_D_E_0" data-points="W3sieCI6MjQ3LjYyMjg2ODc5MTY5NzU2LCJ5Ijo0NTUuMzcyODY4NzkxNjk3NTZ9LHsieCI6MTM4LCJ5Ijo1MzEuMzc1fSx7IngiOjEzOCwieSI6NTY3LjYyNX1d" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/><path d="M327.127,455.373L345.398,468.04C363.668,480.707,400.209,506.041,418.48,524.083C436.75,542.125,436.75,552.875,436.75,558.25L436.75,563.625" id="diagram-3-L_D_F_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_D_F_0" data-points="W3sieCI6MzI3LjEyNzEzMTIwODMwMjQ0LCJ5Ijo0NTUuMzcyODY4NzkxNjk3NTZ9LHsieCI6NDM2Ljc1LCJ5Ijo1MzEuMzc1fSx7IngiOjQzNi43NSwieSI6NTY3LjYyNX1d" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/><path d="M138,642.625L138,646.792C138,650.958,138,659.292,149.514,667.409C161.027,675.526,184.055,683.426,195.569,687.377L207.082,691.327" id="diagram-3-L_E_G_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_E_G_0" data-points="W3sieCI6MTM4LCJ5Ijo2NDIuNjI1fSx7IngiOjEzOCwieSI6NjY3LjYyNX0seyJ4IjoyMTAuODY1ODUzNjU4NTM2NiwieSI6NjkyLjYyNX1d" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/><path d="M436.75,642.625L436.75,646.792C436.75,650.958,436.75,659.292,425.236,667.409C413.723,675.526,390.695,683.426,379.181,687.377L367.668,691.327" id="diagram-3-L_F_G_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_F_G_0" data-points="W3sieCI6NDM2Ljc1LCJ5Ijo2NDIuNjI1fSx7IngiOjQzNi43NSwieSI6NjY3LjYyNX0seyJ4IjozNjMuODg0MTQ2MzQxNDYzNCwieSI6NjkyLjYyNX1d" data-look="classic" marker-end="url(#diagram-3_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_A_B_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_B_C_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_C_D_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(138, 531.375)"><g class="label" data-id="L_D_E_0" transform="translate(-7.5078125, -11.25)"><foreignObject width="15.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>是</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(436.75, 531.375)"><g class="label" data-id="L_D_F_0" transform="translate(-7.5078125, -11.25)"><foreignObject width="15.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>否</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_E_G_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_F_G_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="diagram-3-flowchart-A-0" data-look="classic" transform="translate(287.375, 34.25)"><rect class="basic label-container" style="" x="-52.5078125" y="-26.25" width="105.015625" height="52.5"/><g class="label" style="" transform="translate(-22.5078125, -11.25)"><rect/><foreignObject width="45.015625" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>改代码</p></span></div></foreignObject></g></g><g class="node default" id="diagram-3-flowchart-B-1" data-look="classic" transform="translate(287.375, 148)"><rect class="basic label-container" style="" x="-106.1953125" y="-37.5" width="212.390625" height="75"/><g class="label" style="" transform="translate(-76.1953125, -22.5)"><rect/><foreignObject width="152.390625" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>仿真测试<br />bash host_test/run.sh</p></span></div></foreignObject></g></g><g class="node default" id="diagram-3-flowchart-C-3" data-look="classic" transform="translate(287.375, 273)"><rect class="basic label-container" style="" x="-54.9765625" y="-37.5" width="109.953125" height="75"/><g class="label" style="" transform="translate(-24.9765625, -22.5)"><rect/><foreignObject width="49.953125" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>编译<br />pio run</p></span></div></foreignObject></g></g><g class="node default" id="diagram-3-flowchart-D-5" data-look="classic" transform="translate(287.375, 427.8125)"><polygon points="67.3125,0 134.625,-67.3125 67.3125,-134.625 0,-67.3125" class="label-container" transform="translate(-66.8125, 67.3125)"/><g class="label" style="" transform="translate(-41.0625, -11.25)"><rect/><foreignObject width="82.125" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>第一次烧录?</p></span></div></foreignObject></g></g><g class="node default" id="diagram-3-flowchart-E-7" data-look="classic" transform="translate(138, 605.125)"><rect class="basic label-container" style="" x="-130" y="-37.5" width="260" height="75"/><g class="label" style="" transform="translate(-100, -22.5)"><rect/><foreignObject width="200" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel"><p>备份原固件 → 擦除 → 串口烧录</p></span></div></foreignObject></g></g><g class="node default" id="diagram-3-flowchart-F-9" data-look="classic" transform="translate(436.75, 605.125)"><rect class="basic label-container" style="" x="-118.75" y="-37.5" width="237.5" height="75"/><g class="label" style="" transform="translate(-88.75, -22.5)"><rect/><foreignObject width="177.5" height="45"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>网页 /update<br />或 pio run -e ota -t upload</p></span></div></foreignObject></g></g><g class="node default" id="diagram-3-flowchart-G-11" data-look="classic" transform="translate(287.375, 718.875)"><rect class="basic label-container" style="" x="-112.5234375" y="-26.25" width="225.046875" height="52.5"/><g class="label" style="" transform="translate(-82.5234375, -11.25)"><rect/><foreignObject width="165.046875" height="22.5"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>串口监视 + 实机测试清单</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="diagram-3-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><defs><filter id="diagram-3-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><linearGradient id="diagram-3-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="hsl(0, 0%, 83.3333333333%)" stop-opacity="1"/><stop offset="100%" stop-color="hsl(0, 0%, 88.9215686275%)" stop-opacity="1"/></linearGradient></svg></figure>
+<h3 id="51-准备环境只需一次">5.1 准备环境（只需一次）</h3>
+<pre><code class="language-bash"># 1. 命令行编译工具（仿真测试要用 c++）
+xcode-select --install
+
+# 2. PlatformIO（二选一）
+brew install platformio              # 命令行版
+# 或：安装 VS Code，在扩展里搜索安装 &quot;PlatformIO IDE&quot;
+
+# 3. esptool（用来备份和恢复原厂固件）
+brew install esptool
+</code></pre>
+<p><strong>Apple 芯片不需要 Rosetta：</strong> PlatformIO 仓库里的 ESP8266 编译器 <code>toolchain-xtensa</code>（GCC 10.3）只有 Intel 版。在 Apple 芯片的 Mac 上不装 Rosetta 2 直接用，会报 <code>xtensa-lx106-elf-g++: Bad CPU type in executable</code>。苹果已经宣布 Rosetta 2 会逐步停用，所以本工程在 <code>platformio.ini</code> 的 <code>platform_packages</code> 里，把编译器换成了 ESPHome 维护的原生 arm64 版：</p>
+<ul>
+<li>仓库：<code>esphome-libs/xtensa-lx106-elf-toolchain</code>，版本 <code>10.3.0-esphome.3</code>。</li>
+<li>同为 GCC 10.3，作者逐一验证过，生成的代码与 PlatformIO 官方包 <code>2.100300.220621</code> 一致；唯一的差别是两处 newlib 改动，可以省下约 400 字节 RAM。</li>
+<li>ESPHome 从 2026.10 版起，ESP8266 默认就用这个编译器。</li>
+<li>第一次编译时 PlatformIO 会自动下载约 58MB。如果要在 Intel Mac、Linux 或 Windows 上编译，删掉 <code>platformio.ini</code> 里的那两行 <code>platform_packages</code> 即可。</li>
+<li>只有编译器需要替换。生成固件和烧录用的都是 Python 写的 esptool，在 Apple 芯片上原生运行。</li>
+</ul>
+<p><strong>只装了 PlatformIO 插件时，终端里没有 <code>pio</code> 命令：</strong> 插件把 PlatformIO Core 装在 <code>~/.platformio/penv/</code> 下，但不会加到 PATH。可以临时用 <code>~/.platformio/penv/bin/pio run</code>；也可以一次性加进 PATH：</p>
+<pre><code class="language-bash">mkdir -p ~/.local/bin
+ln -sf ~/.platformio/penv/bin/pio ~/.local/bin/pio
+ln -sf ~/.platformio/penv/bin/platformio ~/.local/bin/platformio
+echo 'export PATH=&quot;$PATH:$HOME/.local/bin&quot;' &gt;&gt; ~/.zprofile    # 然后重新打开终端
+</code></pre>
+<p><strong>串口驱动：</strong> 先执行一次 <code>ls /dev/cu.*</code>，插上 CH343P 串口工具后再执行一次，多出来的那一项就是串口。名字可能是 <code>cu.wchusbserial…</code>、<code>cu.usbserial…</code> 或 <code>cu.usbmodem…</code>。如果什么都没多出来，到沁恒（WCH）官网下载 CH34X/CH343 的 macOS 驱动。原厂教程截图里用的是 <code>/dev/cu.wchusbserial…</code>。</p>
+<p><strong>工程位置与版本管理：</strong> 工程放在 <code>~/Workspace/pzgz/semi-ams-firmware</code>，不在 Synology Drive 的同步目录里，所以编译生成的 <code>.pio/</code>（几百 MB）不会被同步。建议在工程目录里执行一次 <code>git init</code> 做版本管理，<code>.gitignore</code> 已经排除了 <code>.pio/</code>、<code>.vscode/</code> 和 <code>.DS_Store</code>。原厂资料和固件备份仍然放在 <code>~/SynologyDrive/3D打印/20260819_semi-ams/</code>。</p>
+<h3 id="52-先跑仿真测试不需要开发板">5.2 先跑仿真测试（不需要开发板）</h3>
+<pre><code class="language-bash">cd semi-ams-firmware
+bash host_test/run.sh        # 全部通过时显示 &quot;157 passed, 0 failed&quot;
+bash host_test/run.sh -v     # 同时打印每一步的状态变化日志
+</code></pre>
+<p>修改 <code>src/fsm.cpp</code>、<code>src/motor_logic.h</code> 或 <code>src/input.h</code> 后先跑一遍。新增行为时，在 <code>host_test/test_main.cpp</code> 里补一个场景。</p>
+<h3 id="53-编译">5.3 编译</h3>
+<pre><code class="language-bash">pio run
+</code></pre>
+<ul>
+<li>第一次编译会自动下载 ESP8266 工具链、Arduino core 3.1.2，以及点灯库（固定在提交 <code>c73abe1</code>）和 WiFiManager v2.0.17，需要几分钟。</li>
+<li>成功后会显示 RAM / Flash 的占用比例，固件文件在 <code>.pio/build/esp12s/firmware.bin</code>。</li>
+<li><strong>这一步还没有在真实工具链上验证过。</strong> 如果报错，把完整输出发回来修改。</li>
+</ul>
+<p>在 VS Code 里也可以操作：点左侧 PlatformIO 图标，在 Project Tasks → esp12s 下使用 Build、Upload、Monitor。</p>
+<h3 id="54-接线">5.4 接线</h3>
+<p>和原厂教程一致：</p>
+<ul>
+<li>串口工具的跳线帽接 <strong>3V3TTL、VIO</strong>。</li>
+<li>控制板和串口工具的连接：<strong>EN→RTS、TX→RX、RX→TX、GPIO0→DTR、GND→GND</strong>。</li>
+<li><strong>控制板要接 24V 电源</strong>，CN4 上没有 3V3 供电脚。</li>
+</ul>
+<h3 id="55-备份原厂固件第一次烧录前必须做">5.5 备份原厂固件（第一次烧录前必须做）</h3>
+<pre><code class="language-bash">esptool.py --port /dev/cu.wchusbserialXXXX --baud 921600 read_flash 0 0x400000 原厂固件备份-4MB.bin
+ls -l 原厂固件备份-4MB.bin     # 大小应为 4194304 字节
+</code></pre>
+<ul>
+<li>4MB 大约需要 1 分钟。</li>
+<li>把备份文件保存到 <code>~/SynologyDrive/3D打印/20260819_semi-ams/</code>，和原厂资料放在一起。</li>
+<li>新版 esptool 的命令也可以写成 <code>esptool --port … read-flash 0 0x400000 …</code>。</li>
+</ul>
+<h3 id="56-第一次烧录">5.6 第一次烧录</h3>
+<pre><code class="language-bash">pio run -t erase                                     # 整片擦除，清掉原固件的 SPIFFS / EEPROM / WiFi 数据
+pio run -t upload --upload-port /dev/cu.wchusbserialXXXX
+pio device monitor --port /dev/cu.wchusbserialXXXX   # 115200，Ctrl+C 退出
+</code></pre>
+<ul>
+<li>建议第一次先擦除。原固件把点灯密钥存在 SPIFFS 里，新固件读不了，擦干净以后按正常流程配网最省事。</li>
+<li>如果上传时报 <code>Failed to connect</code>，检查 RTS/DTR 两根线。也可以手动进入下载模式：按住黑色按钮，把 EN 短接一下 GND，然后松开按钮。</li>
+<li><code>platformio.ini</code> 里已经设置了 <code>monitor_rts = 0</code>、<code>monitor_dtr = 0</code>。打开串口监视器时不会把芯片按在复位状态或下载模式。</li>
+</ul>
+<p>启动后串口应该能看到类似下面的输出：</p>
+<pre><code>[     0] SEMI-AMS 复刻固件 v1.0.0 启动，输入 help 查看串口命令
+[     0] 传感器 进料口:0 就绪:0 EMPTY:0 FULL:1
+[     0] 状态: 无耗材 -&gt; 无耗材（上电）
+[     0] 尚未配网
+[     0] 配网模式：手机连接热点 SEMI-AMS ...
+</code></pre>
+<h3 id="57-配网与点灯">5.7 配网与点灯</h3>
+<ol>
+<li>手机连接 <code>SEMI-AMS</code> 热点，配置页会自动弹出；没弹出就手动打开 192.168.4.1。</li>
+<li>选择 WiFi，输入密码，在 Blinker Secret 一栏填点灯密钥，然后点 save。</li>
+<li>蓝灯常亮表示已连上。串口里会打印设备 IP。</li>
+<li>点灯 App 里的设置和原厂教程一样：添加独立设备，选网络接入，在界面配置里粘贴 <code>app控制界面配置.txt</code> 的内容。</li>
+<li>浏览器打开 <code>http://设备IP/</code>，就是设备网页。</li>
+</ol>
+<h3 id="58-实机测试清单">5.8 实机测试清单</h3>
+<p>建议按顺序做，每项都可以在网页的状态栏和日志里确认结果。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>项目</th>
+<th>操作</th>
+<th>预期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>传感器</td>
+<td>依次按微动开关，把磁铁移到两颗霍尔上</td>
+<td>网页对应项变成"有效"，日志出现"传感器 …"</td>
+</tr>
+<tr>
+<td>2</td>
+<td>按键</td>
+<td>短按黑色和红色按钮</td>
+<td>日志出现"黑色按钮"/"红色按钮"。<strong>红色按钮要多按几次，确认每次都能识别</strong>（见 3.3 节第 2 条）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>电机方向</td>
+<td>在空闲状态下点"正转 2 秒"</td>
+<td>耗材往打印机方向走。方向反了就把 <code>motor_invert</code> 设为 1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>自动吸入</td>
+<td>插入耗材</td>
+<td>0.5 秒后吸入，就绪开关触发后停止，状态变为"耗材就绪"</td>
+</tr>
+<tr>
+<td>5</td>
+<td>开始打印</td>
+<td>按黑色按钮</td>
+<td>送料直到 FULL 后停止</td>
+</tr>
+<tr>
+<td>6</td>
+<td>补料</td>
+<td>手动拉动滑块到 EMPTY</td>
+<td>开始补料，到 FULL 停止</td>
+</tr>
+<tr>
+<td>7</td>
+<td>原故障复现</td>
+<td>让磁铁在两颗霍尔之间快速来回移动，并在 FULL 旁晃动</td>
+<td>每次到 FULL 都停止，不需要拿开再靠近</td>
+</tr>
+<tr>
+<td>8</td>
+<td>退料</td>
+<td>打印中按黑色按钮</td>
+<td>反转，就绪开关松开后再退约 0.3 秒停止，状态为"已退料"</td>
+</tr>
+<tr>
+<td>9</td>
+<td>退料停止位置</td>
+<td>检查耗材尖端的位置</td>
+<td>尖端仍被齿轮夹住。退过头就把 <code>unload_extra_ms</code> 调小</td>
+</tr>
+<tr>
+<td>10</td>
+<td>重新进料</td>
+<td>"已退料"时按黑色按钮</td>
+<td>吸回就绪位置后自动进入打印并送料</td>
+</tr>
+<tr>
+<td>11</td>
+<td>急停</td>
+<td>在吸入、打印、退料各状态下按红色按钮</td>
+<td>立即停止；再按一次恢复原状态</td>
+</tr>
+<tr>
+<td>12</td>
+<td>超时</td>
+<td>打印中捏住耗材不让走</td>
+<td><code>feed_timeout_s</code> 后进入紧急停止，备注"送料超时"</td>
+</tr>
+<tr>
+<td>13</td>
+<td>长按重启</td>
+<td>按住任意键 3 秒以上</td>
+<td>蓝灯急闪，松开后重启，电机不会自己转</td>
+</tr>
+<tr>
+<td>14</td>
+<td>点灯</td>
+<td>在 App 上按开始、急停、重启</td>
+<td>设备响应，状态和电机控件 1–2 秒内刷新</td>
+</tr>
+<tr>
+<td>15</td>
+<td>断网</td>
+<td>关掉路由器再打开</td>
+<td>蓝灯慢闪，路由器恢复后自动连上，期间送料不受影响</td>
+</tr>
+<tr>
+<td>16</td>
+<td>无线升级</td>
+<td>用网页 <code>/update</code> 上传新的 firmware.bin</td>
+<td>电机自动停止，升级完成后重启</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="59-调参建议">5.9 调参建议</h3>
+<ol>
+<li>先用点动确认方向，再分别调吸入、补料、退料三个速度。原则是"不要太快，够打印机用就行"。补料速度要明显大于打印时的耗材消耗速度。</li>
+<li>根据 PTFE 管长度和送料速度调整 <code>first_feed_timeout_s</code>（首次送到满）和 <code>unload_timeout_s</code>。</li>
+<li>根据第 9 项测试调整 <code>unload_extra_ms</code>，保证退料后齿轮还能夹住耗材。</li>
+<li>修改方式：网页参数区改完点保存；或者在串口输入 <code>set feed_speed 55</code>。参数立即生效，并保存到 Flash。</li>
+</ol>
+<h3 id="510-日常迭代">5.10 日常迭代</h3>
+<pre><code class="language-bash">bash host_test/run.sh          # 改了逻辑先跑仿真
+pio run                        # 编译
+pio run -e ota -t upload       # 无线升级（先在 platformio.ini 的 [env:ota] 填设备 IP）
+</code></pre>
+<p>也可以在网页 <code>/update</code> 里直接上传 <code>.pio/build/esp12s/firmware.bin</code>。</p>
+<h3 id="511-常见问题">5.11 常见问题</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pio: command not found</code></td>
+<td>见 5.1 节：用 <code>~/.platformio/penv/bin/pio</code>，或者把它加进 PATH</td>
+</tr>
+<tr>
+<td><code>Bad CPU type in executable</code></td>
+<td>用的是 PlatformIO 官方的 Intel 版编译器。确认 <code>platformio.ini</code> 里的 <code>platform_packages</code> 那两行还在，再重新编译。可以用 <code>file ~/.platformio/packages/toolchain-xtensa*/bin/xtensa-lx106-elf-g++</code> 查看，应该显示 <code>arm64</code></td>
+</tr>
+<tr>
+<td><code>pio run</code> 编译报错</td>
+<td>把完整输出发回来，按真实工具链的报错修改</td>
+</tr>
+<tr>
+<td>找不到串口</td>
+<td>用 <code>ls /dev/cu.*</code> 对比插拔前后的变化；装 WCH 驱动；换一根数据线</td>
+</tr>
+<tr>
+<td>上传 <code>Failed to connect</code></td>
+<td>检查 RTS/DTR 接线、板子是否接了 24V；或者手动进入下载模式（按住黑键，EN 短接 GND）</td>
+</tr>
+<tr>
+<td>串口监视器打开后设备不运行</td>
+<td>确认 <code>platformio.ini</code> 里有 <code>monitor_rts = 0</code>、<code>monitor_dtr = 0</code></td>
+</tr>
+<tr>
+<td>没有出现配网热点</td>
+<td>已经配过网时，热点要连不上 3 分钟后才会出现；也可以在串口输入 <code>wifireset</code> 清除配置</td>
+</tr>
+<tr>
+<td>点灯显示离线</td>
+<td>检查密钥；在网页修改密钥后要重启才生效；看串口日志里是否有"点灯 Blinker 已启动"</td>
+</tr>
+<tr>
+<td>电机不转</td>
+<td>用网页点动测试；确认 24V 已接；确认状态不是"紧急停止"</td>
+</tr>
+<tr>
+<td>想换回原厂固件</td>
+<td><code>esptool.py --port … write_flash 0 原厂固件备份-4MB.bin</code>，或用 NodeMCU PyFlasher 刷入原来的 <code>.bin</code></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="6-验证现状">6. 验证现状</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>验证</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仿真测试（<code>host_test/</code>）</td>
+<td>22 组场景，157 项检查，全部通过</td>
+</tr>
+<tr>
+<td>语法和类型检查</td>
+<td>全部源码通过 <code>g++ -Wall -Wextra</code> 检查，所用的桩头文件按真实库的函数签名编写</td>
+</tr>
+<tr>
+<td>独立代码审查</td>
+<td>对照 ESP8266 core 3.1.2、WiFiManager 2.0.17、点灯库源码逐项核对，未发现编译或链接问题。提出的运行时问题已全部修正，包括：点灯启动时会触发 WiFi 重连、改掉主机名；停电后配网热点会占住 5 分钟；换料后误报超时；升级标志没有复位；缺少重启兜底；状态接口造成内存碎片</td>
+</tr>
+<tr>
+<td>真实工具链编译</td>
+<td><strong>未进行</strong>（开发环境无法访问 PlatformIO 下载源），需要在 Mac 上完成</td>
+</tr>
+<tr>
+<td>上板实测</td>
+<td><strong>未进行</strong>，按 5.8 节的清单执行</td>
+</tr>
+</tbody>
+</table></div>
+<p>仿真测试覆盖的场景：</p>
+<ul>
+<li>自动吸入；就绪开关失效时用 FULL 兜底；吸入超时及恢复。</li>
+<li>用户抽出耗材不会被吸回；吸入中被抽出。</li>
+<li>打印补料；磁铁从 EMPTY 快速移到 FULL；补料超时及恢复。</li>
+<li>退料到"已退料"；退料取消与超时；就绪开关失效时的退料。</li>
+<li>打印中耗材用尽，以及之后换料；已退料时按键吸料并开始打印；吸料中按键。</li>
+<li>满料兜底后的就绪状态保持；任何状态下的急停；上电状态；两颗霍尔同时有效。</li>
+<li>消抖；按键短按/长按；电机起步、刹车、换向和慢衰减 PWM。</li>
+</ul>
+<hr />
+<h2 id="7-已知限制与后续工作">7. 已知限制与后续工作</h2>
+<ul>
+<li><strong>不支持拓竹 MQTT 自动进退料和 TPU 助力。</strong> 以后要加的话，可以把 MQTT 事件映射成状态机的命令，状态机本身不用改。</li>
+<li><strong>重启后不会自动恢复到"打印中"。</strong> 打印中途断电后需要再按一次黑色按钮。</li>
+<li><strong>点灯通信默认不加密</strong>（点灯库在 ESP8266 上的默认设置）。如需加密，可以定义 <code>BLINKER_WITH_SSL</code>，代价是占用更多内存、阻塞时间更长。</li>
+<li><strong>配网热点默认没有密码</strong>，和原厂一致。热点开着时，WiFiManager 自带的升级页面不需要认证。可以在 <code>config.h</code> 里设置 <code>AP_PASSWORD</code>。</li>
+<li><strong>硬件改进建议</strong>：见 3.3 节，包括连接器额定电流、R8、红色按钮的接法。</li>
+<li><strong>原故障的最终确认</strong>：可以在原固件上，在漏检的那一刻测一次霍尔 OUT 脚。如果读到 0V，就证明是原固件丢了边沿。</li>
+</ul>
+<hr />
+<h2 id="8-附录">8. 附录</h2>
+<h3 id="81-串口命令115200">8.1 串口命令（115200）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>命令</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>help</code></td>
+<td>显示命令列表</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>显示状态、传感器、网络和全部参数</td>
+</tr>
+<tr>
+<td><code>start</code></td>
+<td>开始/结束，等同黑色按钮</td>
+</tr>
+<tr>
+<td><code>emg</code></td>
+<td>紧急停止/解除，等同红色按钮</td>
+</tr>
+<tr>
+<td><code>jog f &lt;速度%&gt; &lt;毫秒&gt;</code>、<code>jog r …</code></td>
+<td>空闲时正转（f）/反转（r）点动电机，例如 <code>jog f 50 2000</code></td>
+</tr>
+<tr>
+<td><code>set &lt;参数&gt; &lt;值&gt;</code></td>
+<td>修改参数并保存，例如 <code>set unload_extra_ms 200</code></td>
+</tr>
+<tr>
+<td><code>key &lt;点灯密钥&gt;</code></td>
+<td>设置点灯密钥，重启后生效</td>
+</tr>
+<tr>
+<td><code>restart</code></td>
+<td>重启</td>
+</tr>
+<tr>
+<td><code>wifireset</code></td>
+<td>清除 WiFi 和点灯密钥后重启</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="82-设备网页接口">8.2 设备网页接口</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/</code></td>
+<td>设备网页</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/status</code></td>
+<td>返回 JSON：状态、电机、传感器、运行时长、WiFi、点灯状态、最近 15 条日志</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/cmd?c=…</code></td>
+<td><code>c</code> 取值：<code>start</code> 开始/结束、<code>emg</code> 急停、<code>jogf</code> / <code>jogr</code> 正转/反转点动 2 秒、<code>restart</code> 重启</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/settings</code></td>
+<td>表单方式提交参数（留空的项不修改），可以带 <code>blinker_key</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/reset</code></td>
+<td>清除 WiFi 和点灯密钥并重启</td>
+</tr>
+<tr>
+<td>GET/POST</td>
+<td><code>/update</code></td>
+<td>固件升级（admin / semi-ams）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="83-点灯控件">8.3 点灯控件</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>key</th>
+<th>类型</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>btn-start-stop</code></td>
+<td>按钮</td>
+<td>开始/结束</td>
+</tr>
+<tr>
+<td><code>btn-emergency</code></td>
+<td>按钮</td>
+<td>紧急停止/解除</td>
+</tr>
+<tr>
+<td><code>btn-restart</code></td>
+<td>按钮</td>
+<td>重启</td>
+</tr>
+<tr>
+<td><code>btn-mqtt</code></td>
+<td>按钮</td>
+<td>显示为灰色"MQTT未启用"，点击后提示"本固件不支持MQTT"</td>
+</tr>
+<tr>
+<td><code>tex-state</code></td>
+<td>文本</td>
+<td>工作状态，例如"打印中"、"紧急停止（送料超时）"</td>
+</tr>
+<tr>
+<td><code>tex-motor</code></td>
+<td>文本</td>
+<td>正转 / 反转 / 停止</td>
+</tr>
+<tr>
+<td><code>tex-runtime</code></td>
+<td>文本</td>
+<td>运行时长，格式 <code>x天x时x分</code></td>
+</tr>
+<tr>
+<td><code>tex-ip</code></td>
+<td>文本</td>
+<td>设备 IP</td>
+</tr>
+<tr>
+<td><code>tex-hint</code></td>
+<td>文本</td>
+<td>提示设备网页的地址</td>
+</tr>
+<tr>
+<td><code>num-rssi</code></td>
+<td>数值</td>
+<td>WiFi 信号（dBm）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="84-蓝灯含义">8.4 蓝灯含义</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>蓝灯</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>慢闪（1 秒）</td>
+<td>正在连接 WiFi，或在后台重连</td>
+</tr>
+<tr>
+<td>快闪（0.2 秒）</td>
+<td>配网热点 SEMI-AMS 已打开</td>
+</tr>
+<tr>
+<td>常亮</td>
+<td>WiFi 已连接</td>
+</tr>
+<tr>
+<td>急闪</td>
+<td>长按已满 3 秒，松开即重启</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="85-依赖版本">8.5 依赖版本</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>依赖</th>
+<th>版本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PlatformIO platform</td>
+<td>espressif8266@4.2.1（Arduino core 3.1.2）</td>
+</tr>
+<tr>
+<td>点灯 Blinker 库</td>
+<td>blinker-library 0.3.12，提交 <code>c73abe1</code>（2025-03-25）</td>
+</tr>
+<tr>
+<td>WiFiManager</td>
+<td>tzapu/WiFiManager v2.0.17</td>
+</tr>
+<tr>
+<td>编译器（Apple 芯片）</td>
+<td>esphome-libs/xtensa-lx106-elf-toolchain <code>10.3.0-esphome.3</code>（GCC 10.3，darwin_arm64）</td>
+</tr>
+<tr>
+<td>Flash 布局</td>
+<td>4MB，其中 1MB 给 LittleFS（<code>eagle.flash.4m1m.ld</code>），DOUT 模式</td>
+</tr>
+</tbody>
+</table></div>
+  </main>
+</div>
+<button class="theme-toggle" type="button" aria-label="切换深色/浅色">深色 / 浅色</button>
+<script>
+(function(){
+  var toc=document.querySelector('.toc');
+  if(window.matchMedia('(max-width: 1000px)').matches) toc.removeAttribute('open');
+
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='复制';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1200)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,function(){})}
+    });
+    pre.appendChild(b);
+  });
+
+  var root=document.documentElement, btn=document.querySelector('.theme-toggle');
+  try{var saved=localStorage.getItem('semi-doc-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('semi-doc-theme',next)}catch(e){}
+  });
+
+  var links={}; document.querySelectorAll('.toc a').forEach(function(a){links[decodeURIComponent(a.getAttribute('href').slice(1))]=a});
+  var heads=[].slice.call(document.querySelectorAll('main h2[id], main h3[id]'));
+  if('IntersectionObserver' in window){
+    var current=null;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ current=e.target.id; } });
+      Object.keys(links).forEach(function(k){links[k].classList.toggle('active',k===current)});
+    },{rootMargin:'0px 0px -70% 0px'});
+    heads.forEach(function(h){io.observe(h)});
+  }
+})();
+</script>
+</body>
+</html>
