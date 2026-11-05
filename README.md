@@ -149,9 +149,9 @@ PWM 频率、刹车时间、长按时间、配网热点名称、OTA 密码等不
 
 - **设备网页 `http://设备IP/`**：可以查看状态、传感器和日志，开始/结束、紧急停止、点动、调参、重启、重置配网。日志会保存到 Flash，点"查看完整日志"能看到重启前的记录（`http://设备IP/api/log`）。
 - **网页升级 `/update`**：上传 `.pio/build/esp12s/firmware.bin`，用户名 `admin`，密码 `semi-ams`。
-- **PlatformIO 无线升级**：先在 `platformio.ini` 的 `[env:ota]` 里填设备 IP，然后执行 `pio run -e ota -t upload`。
+- **PlatformIO 无线升级**：设备 IP 填在 `platformio.ini` 的 `[env:ota]` 里（或加 `--upload-port IP`），然后执行 `pio run -e ota -t upload`。
 - 升级过程中电机会自动停止。
-- 如果 OTA 报 `Flash config wrong`：模组的闪存芯片比 4MB 小，只能用串口烧录。开机日志的"闪存"一行会写出实际容量（这台实测是 2MB）。
+- 固件按 2MB 分区编译（SEMI-AMS 板上的模组实测是 2MB），2MB 和 4MB 的模组都能无线升级。设备上还是 v1.1.x（按 4MB 编译）时 OTA 会报 `Flash config wrong`，要先用串口烧录一次 v1.2.0；第一次启动会自动把参数迁移到新分区。
 - 烧录完只看串口日志时，拔掉 EN→RTS 和 GPIO0→DTR 两根线，只留 TX、RX、GND，否则设备会被按住复位或进入下载模式，网页打不开。
 - 程序崩溃时，原因和调用栈会存进 RTC 内存，下次开机写进日志（"上次崩溃"几行），解码方法见文档 4.8 节。
 - 改代码时注意：中文字符串都放在 Flash 里以节省内存（`LOG()`、`SEMI_P()`、`PSTR()`、`F()`），Flash 里的字符串不能直接逐字节读，写法见文档 4.10 节。

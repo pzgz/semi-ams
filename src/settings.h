@@ -30,6 +30,7 @@ extern Settings gSettings;
 const SettingDef* settingDefs(size_t& count);
 
 bool settingsBegin();  // 挂载文件系统并读取
+const char* settingsBeginNote();  // 新建了文件系统或迁移了参数时的说明（在 Flash 里，用 %S 读），否则 nullptr
 bool settingsSave();
 long settingsGet(const char* key);
 // 设置一个数值参数；超出范围或未知 key 返回 false

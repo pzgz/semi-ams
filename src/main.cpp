@@ -637,6 +637,7 @@ void setup() {
   crash::reportLast();
 
   if (!settingsBegin()) LOG("文件系统挂载失败，使用默认参数");
+  else if (settingsBeginNote()) LOG(SEMI_PS, settingsBeginNote());
 
   semi::MotorLogic::Config mcfg;
   mcfg.startDuty = MOTOR_START_DUTY;

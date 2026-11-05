@@ -132,11 +132,54 @@ bool settingsMqttConfigured() {
   return gSettings.mqttIp[0] && gSettings.mqttSn[0] && gSettings.mqttCode[0];
 }
 
+// ---- 从旧分区迁移参数 ----
+// v1.1.4 及以前按 4MB 分区编译（eagle.flash.4m1m.ld，文件系统在 0x300000、块大小 8KB）。这块模组的闪存
+// 实际只有 2MB，超出的地址会绕回前 2MB，所以旧文件系统实际在 0x100000。v1.2.0 起改成 2MB 分区
+// （eagle.flash.2m256.ld，文件系统在 0x1C0000），第一次启动时新文件系统是空的：从旧位置读出参数
+// 写进去，然后擦掉旧文件系统的开头，保证只迁移一次。WiFi 和点灯库的 EEPROM 两种分区下位置相同，不用迁移
+static const uint32_t kOldFsAddr = 0x100000, kOldFsSize = 0xFA000, kOldFsPage = 0x100, kOldFsBlock = 0x2000;
+static const char* gBeginNote = nullptr;
+
+static String readOldSettings() {
+  String s;
+  if (FS_PHYS_ADDR == kOldFsAddr || ESP.getFlashChipSize() < kOldFsAddr + kOldFsSize) return s;
+  fs::FS oldFs(fs::FSImplPtr(new littlefs_impl::LittleFSImpl(kOldFsAddr, kOldFsSize, kOldFsPage, kOldFsBlock, 1)));
+  oldFs.setConfig(LittleFSConfig(false));  // 旧位置不是文件系统时不要格式化它
+  if (!oldFs.begin()) return s;
+  File f = oldFs.open(kFile, "r");
+  if (f) {
+    s = f.readString();
+    f.close();
+  }
+  oldFs.end();
+  return s;
+}
+
+static void eraseOldFsHead() {
+  // 旧文件系统的超级块在头两个 8KB 块里；这里现在是固件升级用的空闲区，擦掉不影响任何东西
+  for (uint32_t a = kOldFsAddr; a < kOldFsAddr + 2 * kOldFsBlock; a += 0x1000) ESP.flashEraseSector(a / 0x1000);
+}
+
+const char* settingsBeginNote() { return gBeginNote; }
+
 bool settingsBegin() {
+  LittleFS.setConfig(LittleFSConfig(false));  // 挂载失败时先不自动格式化：要先试着迁移旧参数
   if (!LittleFS.begin()) {
-    // 第一次使用或分区损坏：格式化后再挂载
+    // 第一次使用、分区位置变了，或文件系统损坏
+    const String old = readOldSettings();
     LittleFS.format();
     if (!LittleFS.begin()) return false;
+    if (old.length()) {
+      File w = LittleFS.open(kFile, "w");
+      if (w) {
+        w.print(old);
+        w.close();
+        eraseOldFsHead();
+        gBeginNote = PSTR("文件系统换到新分区，参数已从旧分区迁移过来");
+      }
+    } else {
+      gBeginNote = PSTR("文件系统是新建的，参数用默认值");
+    }
   }
   File f = LittleFS.open(kFile, "r");
   if (!f) return true;  // 没有文件就用默认值
