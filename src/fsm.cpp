@@ -51,6 +51,18 @@ void Fsm::logf(const char* fmt, ...) {
   log_(buf);
 }
 
+void Fsm::flushFeedStats(uint32_t now) {
+  if (statFeeds_ || statBoth_) {
+    const uint32_t min = (now - statSince_ + 30000) / 60000;
+    logf(SEMI_P("最近 %lu 分钟补料 %lu 次，共 %lu.%lu 秒，最长 %lu.%lu 秒；EMPTY/FULL 短暂同时有效 %lu 次"),
+         (unsigned long)min, (unsigned long)statFeeds_, (unsigned long)(statFeedMs_ / 1000),
+         (unsigned long)(statFeedMs_ % 1000 / 100), (unsigned long)(statFeedMax_ / 1000),
+         (unsigned long)(statFeedMax_ % 1000 / 100), (unsigned long)statBoth_);
+  }
+  statSince_ = now;
+  statFeeds_ = statFeedMs_ = statFeedMax_ = statBoth_ = 0;
+}
+
 void Fsm::setNote(const char* n) {
   if (!n) n = "";
   if (n != note_) {
@@ -76,6 +88,7 @@ void Fsm::begin(const Inputs& in, uint32_t now) {
 }
 
 void Fsm::enter(State s, uint32_t now, const char* why) {
+  if (state_ == State::Printing && s != State::Printing) flushFeedStats(now);
   logf(SEMI_P("状态: " SEMI_PS " -> " SEMI_PS "（" SEMI_PS "）"), stateName(state_), stateName(s), why);
   state_ = s;
   enteredAt_ = now;
@@ -100,6 +113,10 @@ void Fsm::enter(State s, uint32_t now, const char* why) {
       break;
     case State::Printing:
       startAfterLoad_ = false;
+      firstFeed_ = !last_.full;  // 一开始就满的话没有"第一段"
+      bothSeen_ = bothHalls_ = false;
+      statSince_ = now;
+      statFeeds_ = statFeedMs_ = statFeedMax_ = statBoth_ = 0;
       // 开始打印时先一直送料直到缓冲器满（耗材要先走完到打印机的 PTFE 管）
       feeding_ = !last_.full;
       feedStart_ = now;
@@ -271,6 +288,7 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
           feeding_ = !in.full;
           feedStart_ = now;
           feedLimit_ = params_.firstFeedTimeoutMs;
+          firstFeed_ = true;
           logf(SEMI_P("检测到新耗材，重新送料到满"));
         }
       }
@@ -294,22 +312,41 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
         // 料尾还没送出：照常按缓冲器送料（到 FULL 暂停，EMPTY 再送），下面的逻辑不变
       }
 
-      // 两颗霍尔同时有效：按"满"处理不送料（避免送过头），但打印机会拉不动耗材，所以明确提示
+      // 两颗霍尔同时有效：按"满"处理不送料（避免送过头）。滑块从 FULL 移向 EMPTY 时，两个触发区
+      // （加上霍尔的回差）可能短暂重叠，实测每次补料前都会出现，只计数；持续 kBothWarnMs 以上才说明
+      // 滑块停在了重叠区或卡住了，这时打印机会拉不动耗材，才提示
       if (in.lack && in.full) {
-        if (!bothHalls_) {
+        if (!bothSeen_) {
+          bothSeen_ = true;
+          bothSince_ = now;
+          statBoth_++;
+        } else if (!bothHalls_ && now - bothSince_ >= kBothWarnMs) {
           bothHalls_ = true;
           setNote(SEMI_P("EMPTY和FULL同时有效，不送料"));
-          logf(SEMI_P("EMPTY 和 FULL 霍尔同时有效：按缓冲器满处理，不送料（磁铁太大或滑块卡住？）"));
+          logf(SEMI_P("EMPTY 和 FULL 霍尔同时有效超过 %lu 秒：按缓冲器满处理，不送料（滑块卡住或磁铁太大？）"),
+               (unsigned long)(kBothWarnMs / 1000));
         }
-      } else if (bothHalls_) {
-        bothHalls_ = false;
-        setNote("");
+      } else {
+        bothSeen_ = false;
+        if (bothHalls_) {
+          bothHalls_ = false;
+          setNote("");
+          logf(SEMI_P("EMPTY 和 FULL 霍尔恢复正常"));
+        }
       }
 
       if (feeding_) {
         if (in.full) {
           feeding_ = false;
-          logf(SEMI_P("缓冲器已满，停止补料"));
+          const uint32_t ms = now - feedStart_;
+          if (firstFeed_) {
+            firstFeed_ = false;
+            logf(SEMI_P("缓冲器已满，送料用时 %lu.%lu 秒"), (unsigned long)(ms / 1000), (unsigned long)(ms % 1000 / 100));
+          } else {
+            statFeeds_++;
+            statFeedMs_ += ms;
+            if (ms > statFeedMax_) statFeedMax_ = ms;
+          }
         } else if (now - feedStart_ > feedLimit_) {
           emergency(SEMI_P("送料超时"), now);
           break;
@@ -318,8 +355,8 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
         feeding_ = true;
         feedStart_ = now;
         feedLimit_ = params_.feedTimeoutMs;
-        logf(SEMI_P("缓冲器已空，开始补料"));
       }
+      if (now - statSince_ >= kStatEveryMs) flushFeedStats(now);
       setMotor(feeding_ ? MotorDir::Forward : MotorDir::Stop, params_.feedSpeed);
       break;
     }

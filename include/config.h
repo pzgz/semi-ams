@@ -3,7 +3,7 @@
 #pragma once
 
 #define FW_NAME    "SEMI-AMS"
-#define FW_VERSION "1.1.3"
+#define FW_VERSION "1.1.4"
 
 // ---------------- 引脚 ----------------
 #define PIN_HALL_EMPTY    12  // U11 EMPTY_CHECK（DRV5032FA 推挽），低电平 = 缓冲器空

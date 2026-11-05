@@ -458,18 +458,84 @@ static void test_bambu_pull_out_prompt() {
   CHECK(q.unload());
 }
 
+static size_t logCount(const char* part) {
+  size_t n = 0;
+  for (const auto& l : g_log) n += l.find(part) != std::string::npos;
+  return n;
+}
+
 static void test_fsm_both_halls_warning() {
-  title("打印中两颗霍尔同时有效：不送料，并在备注里提示");
+  title("打印中两颗霍尔同时有效：不送料；短暂重叠只计数，持续 3 秒才提示");
   Sim s(Inputs{true, true, true, false});
   s.press(true);
   s.run(50);
   CHECK(s.m() == MotorDir::Forward);
+  g_log.clear();
   s.in.full = true;  // EMPTY 和 FULL 同时有效
   s.run(20);
   CHECK(s.m() == MotorDir::Stop);
+  CHECK(std::strcmp(s.fsm.note(), "") == 0);  // 短暂重叠：不提示
+  s.in.lack = false;                          // 滑块继续移动，重叠消失
+  s.run(1000);
+  CHECK(logCount("同时有效超过") == 0);
+  // 持续同时有效：3 秒后提示，期间一直不送料
+  s.in.lack = true;
+  s.run(2900);
+  CHECK(std::strcmp(s.fsm.note(), "") == 0);
+  CHECK(s.m() == MotorDir::Stop);
+  s.run(200);
   CHECK(std::strcmp(s.fsm.note(), "EMPTY和FULL同时有效，不送料") == 0);
-  s.in.lack = false;
+  CHECK(logCount("同时有效超过 3 秒") == 1);
+  CHECK(s.m() == MotorDir::Stop);
+  s.in.full = false;  // FULL 释放：缓冲器空，开始补料
   s.run(20);
   CHECK(std::strcmp(s.fsm.note(), "") == 0);
+  CHECK(logCount("恢复正常") == 1);
+  CHECK(s.m() == MotorDir::Forward);
+}
+
+static void test_fsm_feed_stats() {
+  title("打印中补料不逐次写日志：每 10 分钟和结束打印时汇总");
+  Sim s(Inputs{true, true, true, false});
+  g_log.clear();
+  s.press(true);
+  s.run(1500);
+  s.in.lack = false;
+  s.in.full = true;  // 第一段送到满
+  s.run(20);
+  CHECK(logCount("缓冲器已满，送料用时 1.") == 1);
+  // 补料 5 次，每次从空送到满约 0.8 秒；中间短暂两颗同时有效
+  for (int i = 0; i < 5; i++) {
+    s.in.lack = true;  // 滑块移向 EMPTY 时先短暂同时有效
+    s.run(100);
+    s.in.full = false;
+    s.run(800);
+    CHECK(s.m() == MotorDir::Forward);
+    s.in.lack = false;
+    s.in.full = true;
+    s.run(20);
+    CHECK(s.m() == MotorDir::Stop);
+    s.run(20000);
+  }
+  CHECK(logCount("最近") == 0);  // 还没到 10 分钟，没有汇总
+  CHECK(logCount("缓冲器已空") == 0 && logCount("停止补料") == 0);
+  // 结束打印：汇总一次
+  s.press(true);
+  CHECK(s.st() == State::Unloading);
+  CHECK(logCount("补料 5 次，共 4.") == 1);
+  CHECK(logCount("最长 0.8 秒") + logCount("最长 0.9 秒") == 1);
+  CHECK(logCount("短暂同时有效 5 次") == 1);
+  // 10 分钟定时汇总
+  Sim t(Inputs{true, true, false, true});
+  g_log.clear();
+  t.press(true);
+  t.in.full = false;
+  t.in.lack = true;
+  t.run(500);
+  t.in.lack = false;
+  t.in.full = true;
+  t.run(20);
+  t.run(600000);
+  CHECK(logCount("最近 10 分钟补料 1 次") == 1);
 }
 

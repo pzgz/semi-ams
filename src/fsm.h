@@ -95,6 +95,7 @@ class Fsm {
   void setNote(const char* n);
   void setMotor(MotorDir d, uint8_t speed);
   void logf(const char* fmt, ...);
+  void flushFeedStats(uint32_t now);
 
   Params params_;
   LogFn log_ = nullptr;
@@ -119,13 +120,21 @@ class Fsm {
   bool readyBySwitch_ = false;   // 就绪状态是由就绪开关确认的（不是满料霍尔兜底）
 
   // Printing
+  static constexpr uint32_t kBothWarnMs = 3000;     // 两颗霍尔同时有效持续这么久才提示
+  static constexpr uint32_t kStatEveryMs = 600000;  // 补料统计每 10 分钟汇总一次
   bool feeding_ = false;
   uint32_t feedStart_ = 0;
   uint32_t feedLimit_ = 0;
   bool outOfMaterial_ = false;
   bool refillTiming_ = false;  // 打印中耗材用尽后又插入新耗材，等插入延时
   uint32_t refillSince_ = 0;
-  bool bothHalls_ = false;  // EMPTY 和 FULL 同时有效（已提示过）
+  bool bothSeen_ = false;    // EMPTY 和 FULL 现在同时有效
+  uint32_t bothSince_ = 0;
+  bool bothHalls_ = false;   // 同时有效已持续 kBothWarnMs（已提示过）
+  bool firstFeed_ = false;   // 正在送第一段（开始打印或换上新耗材后送到满），完成时写日志
+  // 打印中补料统计：每次补料不再单独写日志，每 kStatEveryMs 和离开打印中时汇总一条
+  uint32_t statSince_ = 0;
+  uint32_t statFeeds_ = 0, statFeedMs_ = 0, statFeedMax_ = 0, statBoth_ = 0;
   bool tailDone_ = false;       // 耗材用尽后的料尾送料已结束
   bool tailReadySeen_ = false;  // 料尾送料期间就绪开关有料（之后松开 = 料尾已离开齿轮）
   uint32_t tailUsedMs_ = 0;     // 料尾送料已用的电机时间

@@ -656,6 +656,7 @@ int main(int argc, char** argv) {
   test_mqtt_reader_edge();
   test_bambu_pull_out_prompt();
   test_fsm_both_halls_warning();
+  test_fsm_feed_stats();
   std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }

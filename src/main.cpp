@@ -156,12 +156,11 @@ void tick() {
     }
   }
 
-  bool changed = false;
-  changed |= gIn.update(digitalRead(PIN_SW_IN) == LOW);
-  changed |= gReady.update(digitalRead(PIN_SW_READY) == LOW);
-  changed |= gLack.update(digitalRead(PIN_HALL_EMPTY) == LOW);
-  changed |= gFull.update(digitalRead(PIN_HALL_FULL) == LOW);
-  if (changed) {
+  const bool swChanged = gIn.update(digitalRead(PIN_SW_IN) == LOW) | gReady.update(digitalRead(PIN_SW_READY) == LOW);
+  const bool hallChanged = gLack.update(digitalRead(PIN_HALL_EMPTY) == LOW) | gFull.update(digitalRead(PIN_HALL_FULL) == LOW);
+  // 打印中缓冲器的两颗霍尔每隔几十秒就变化一次，不逐条记录（状态机每 10 分钟汇总一次补料情况），
+  // 否则一次打印的日志就会把日志文件写满，把开始打印时的记录挤掉
+  if (swChanged || (hallChanged && gFsm.state() != semi::State::Printing)) {
     LOG("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(),
              gLack.value(), gFull.value());
   }

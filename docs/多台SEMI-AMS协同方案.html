@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多台 SEMI-AMS 协同方案（待实施）</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#646a73; --border:#e3e5e9;
+  --accent:#1a5fd6; --accent-weak:#e9f0fd; --code-bg:#f1f3f5; --code-text:#24292f;
+  --row:#fafbfc; --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+    --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+    --row:#1e2128; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+  --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+  --row:#1e2128; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px 14px 6px;box-shadow:var(--shadow);font-size:13.5px}
+.toc summary{list-style:none;cursor:pointer;font-weight:600;padding:2px 12px 8px;color:var(--text)}
+.toc summary::-webkit-details-marker{display:none}
+.toc ul{list-style:none;margin:0;padding-left:12px}
+.toc-list>ul{padding-left:4px}
+.toc-list>ul>li{margin-top:6px}
+.toc-list>ul>li>a{color:var(--text);font-weight:600}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:3px 8px;border-radius:6px;color:var(--muted);text-decoration:none;line-height:1.45}
+.toc a:hover{background:var(--accent-weak);color:var(--text)}
+.toc a.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+main{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:36px 44px 48px;box-shadow:var(--shadow);min-width:0}
+h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
+h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:30px 0 10px}
+h2+h3{margin-top:16px}
+h4{font-size:15px;margin:22px 0 8px}
+h3+h4{margin-top:12px}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+hr{display:none}
+strong{font-weight:650}
+ul,ol{padding-left:1.4em}
+li{margin:3px 0}
+code{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);color:var(--code-text);
+  padding:.12em .4em;border-radius:5px;word-break:break-word}
+pre{position:relative;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.55}
+pre code{background:none;padding:0;font-size:13px;word-break:normal;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  font-size:12px;border-radius:6px;padding:2px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus{opacity:1}
+.table-wrap{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--row);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even) td{background:var(--row)}
+td code{white-space:nowrap}
+figure.diagram{margin:18px 0 22px;padding:16px;background:#fff;color:#1f2329;color-scheme:light;border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+figure.diagram svg{max-width:100%;height:auto}
+figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figure.diagram svg foreignObject p{color:#1f2329}
+.theme-toggle{position:fixed;right:16px;bottom:16px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width: 1000px){
+  .layout{grid-template-columns:1fr;padding:16px 16px 72px;gap:14px}
+  .toc{position:static;max-height:none}
+  main{padding:22px 18px 32px;border-radius:12px}
+  h1{font-size:23px}
+  h2{font-size:19px}
+  figure.diagram{padding:10px}
+  figure.diagram svg{min-width:560px}
+}
+@media print{
+  body{background:#fff}
+  .toc,.theme-toggle,.copy{display:none}
+  .layout{display:block;padding:0}
+  main{border:none;box-shadow:none;padding:0}
+  h2{break-after:avoid}
+  pre,figure,.table-wrap{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <details class="toc" open>
+    <summary>目录</summary>
+    <div class="toc-list">
+<ul>
+<li><a href="#1-目标">1. 目标</a></li>
+<li><a href="#2-前提和限制">2. 前提和限制</a></li>
+<li><a href="#3-能用的信号">3. 能用的信号</a></li>
+<li><a href="#4-三种做法">4. 三种做法</a><ul>
+<li><a href="#41-做法一按外置料盘的设置匹配推荐第一步">4.1 做法一：按外置料盘的设置匹配（推荐第一步）</a></li>
+<li><a href="#42-做法二协调程序读打印文件全自动需要一台常开的设备">4.2 做法二：协调程序读打印文件（全自动，需要一台常开的设备）</a></li>
+<li><a href="#43-做法三外置料盘多色换料待验证">4.3 做法三：外置料盘多色换料（待验证）</a></li>
+</ul>
+</li>
+<li><a href="#5-顺带要做的改进单台也有用">5. 顺带要做的改进（单台也有用）</a></li>
+<li><a href="#6-实施顺序">6. 实施顺序</a></li>
+<li><a href="#7-未决问题">7. 未决问题</a></li>
+</ul>
+</div>
+
+  </details>
+  <main>
+<h1 id="多台-semi-ams-协同方案待实施">多台 SEMI-AMS 协同方案（待实施）</h1>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>状态</td>
+<td>方案记录，<strong>还没有开始实现</strong></td>
+</tr>
+<tr>
+<td>记录日期</td>
+<td>2026-11-06</td>
+</tr>
+<tr>
+<td>适用版本</td>
+<td>在 v1.1.4 的基础上改</td>
+</tr>
+<tr>
+<td>依据</td>
+<td><a href="拓竹MQTT消息参考.html">拓竹MQTT消息参考</a>（P2S 实测消息）</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="1-目标">1. 目标</h2>
+<p>几台 SEMI-AMS 各装一种耗材，出料口经过一个多进一出的合流件（Y 型或多通），汇成一路接到打印机唯一的外置料盘入口。打印时如果用外置料盘，<strong>由对应耗材的那一台自动送料</strong>，其它几台不动；打完退料也只由这一台退。</p>
+<p>以后可以再扩展的（不在第一步里）：</p>
+<ul>
+<li>两台装同样的耗材，一台用完另一台接着送（续料）。</li>
+<li>多色任务全部映射到外置料盘时，按换色自动切换进料器（取决于 P2S 是否支持，见 4.3 节）。</li>
+</ul>
+<h2 id="2-前提和限制">2. 前提和限制</h2>
+<ul>
+<li><strong>打印机不知道有几台进料器。</strong> P2S 只有一个外置料盘（<code>vir_slot</code> 255），消息里只说"这次用外置料盘"和"外置料盘设成了什么耗材"。选哪一台只能由进料器自己判断。</li>
+<li><strong>每台各自连打印机的 MQTT、各自判断。</strong> 几台听到的是同一份消息，只要规则一样，就能得出同一个结论，彼此不用通信。实测 2 个客户端同时连接没问题，打印机最多允许几个客户端还要测。</li>
+<li><strong>只读。</strong> 目前固件只发 <code>pushall</code>，不向打印机发控制命令。凡是要写打印机的做法（例如自动修改外置料盘的耗材设置），都要另外决定。</li>
+<li><strong>ESP8266 内存小。</strong> 连上点灯和打印机后空闲约 13KB，下载和解压 3MF（至少要 32KB 的解压窗口）在进料器上做不到。</li>
+<li><strong>机械上</strong>：没被选中的几台，料头必须退到合流件之前，否则会挡住被选中那一台的耗材。被选中那一台从自己的就绪开关送到打印机，路径比现在长一段合流件，首次送料超时（<code>first_feed_timeout_s</code>，默认 120 秒）可能要加大。</li>
+</ul>
+<h2 id="3-能用的信号">3. 能用的信号</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>信号</th>
+<th>来源</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vir_slot[0].tray_type</code>、<code>tray_color</code>、<code>tray_info_idx</code></td>
+<td>每条 <code>push_status</code></td>
+<td>外置料盘现在设成了什么耗材 → 选哪一台</td>
+</tr>
+<tr>
+<td><code>project_file.ams_mapping2</code></td>
+<td>开始打印</td>
+<td>这次是否用外置料盘（现有逻辑）</td>
+</tr>
+<tr>
+<td><code>project_file.url</code></td>
+<td>开始打印（云打印）</td>
+<td>打印文件下载链接，3MF 里有这块板要用的耗材</td>
+</tr>
+<tr>
+<td><code>mapping</code></td>
+<td>每条 <code>push_status</code></td>
+<td>当前任务是否用外置料盘（中途接入时用）</td>
+</tr>
+<tr>
+<td><code>print_error</code> <code>0x07FFC006</code></td>
+<td>进料阶段</td>
+<td>打印机在等外置料盘的耗材</td>
+</tr>
+<tr>
+<td><code>print_error</code> <code>0x07FFC003</code>、<code>ams_change_filament</code></td>
+<td>退料</td>
+<td>现有逻辑</td>
+</tr>
+<tr>
+<td><code>device.extruder.info[].snow</code> / bit1</td>
+<td>每条 <code>push_status</code></td>
+<td>当前料盘、挤出机里有没有耗材</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="4-三种做法">4. 三种做法</h2>
+<h3 id="41-做法一按外置料盘的设置匹配推荐第一步">4.1 做法一：按外置料盘的设置匹配（推荐第一步）</h3>
+<p><strong>思路</strong>：每台记住自己装的是什么耗材；打印前用户在打印机屏幕、App 或 Studio 里把外置料盘设成想用的那卷（拓竹本来就要求设对，喷嘴温度才对）；开始打印时，耗材和 <code>vir_slot</code> 对得上的那一台送料。</p>
+<p><strong>每台的设置</strong>（网页和点灯 App）：</p>
+<ul>
+<li>我的耗材：类型（如 <code>PETG</code>）、颜色（如 <code>057748</code>），可选的耗材预设编号（如 <code>GFG99</code>）。</li>
+<li>按钮"读取打印机当前的外置料盘"：一键把 <code>vir_slot</code> 的类型、颜色、预设记成"我的耗材"。日常用法：把外置料盘设成这台的耗材 → 在这台上点一下。</li>
+<li>优先级（同样的耗材装了两台时用，第一步可以先不支持，在网页上提示"有重复"）。</li>
+</ul>
+<p><strong>判断规则</strong>：</p>
+<ul>
+<li>类型相同（不分大小写）且颜色相同（只比 RGB，不比透明度）；设置了预设编号的还要预设相同。</li>
+<li>收到"开始打印"且用外置料盘时：对得上的那一台照现在的逻辑送料；对不上的写一条日志"外置料盘是 PLA 白，本机是 PETG 绿，不送料"，然后什么都不做。</li>
+<li>退料：现在的状态机只在"打印中"响应打印机的退料，没选中的几台本来就不在"打印中"，不用改。但"打印机空闲时耗材离开了打印机"这条备用判断要限制为只对本次送料的那一台生效。</li>
+<li>一台都对不上时：每台都不送料，网页和 App 提示"外置料盘的耗材没有对应的进料器"。</li>
+<li>没有设置"我的耗材"的进料器按现在的方式工作（单台使用不受影响）。</li>
+</ul>
+<p><strong>界面</strong>：网页"拓竹打印机"卡片和点灯 App 显示"外置料盘：PETG 深绿 / 本机：PETG 深绿 ✓"。</p>
+<p><strong>改动范围</strong>：<code>settings</code>（新增三个设置项）、<code>bambu</code>（解析 <code>vir_slot</code>，状态里加"外置料盘耗材"）、<code>printer</code>（开始打印时做匹配，不匹配就不调用 <code>requestPrinterStart</code>）、网页、点灯控件、仿真测试。</p>
+<p><strong>动手前先测</strong>：</p>
+<ol>
+<li>开着 <code>bambu_listen.py</code>，在打印机屏幕上改一下外置料盘的耗材，看 <code>vir_slot</code> 是不是马上更新；再分别在 App 和 Studio 里改一次。</li>
+<li>在 Studio 发送打印、选择外置料盘时，看它会不会顺便改掉外置料盘的耗材设置。</li>
+<li>同时开 4–5 个监听程序，看打印机最多接受几个 MQTT 客户端。</li>
+</ol>
+<h3 id="42-做法二协调程序读打印文件全自动需要一台常开的设备">4.2 做法二：协调程序读打印文件（全自动，需要一台常开的设备）</h3>
+<p><strong>思路</strong>：在 NAS、Docker 或一直开着的电脑上跑一个小程序（可以从 <code>tools/bambu_listen.py</code> 改），监听打印机的 MQTT：</p>
+<ol>
+<li>收到 <code>project_file</code> 后，用 <code>url</code> 下载 3MF（云打印是 1 小时内有效的 HTTPS 链接），读 <code>Metadata/slice_info.config</code>，得到这块板要用的耗材（类型、颜色、预设编号、用量）。</li>
+<li>按 <code>ams_mapping2</code> 找出映射到外置料盘的那一种。</li>
+<li>通过进料器的网页接口（新增，例如 <code>POST /api/select</code>）告诉对应的那一台"这次是你"，其它几台"这次不是你"。</li>
+</ol>
+<p><strong>好处</strong>：不需要用户打印前去改外置料盘设置；还能在开始前检查"需要的耗材有没有装"，没装就提醒。</p>
+<p><strong>问题</strong>：</p>
+<ul>
+<li>多一个要一直运行的程序，它不在线时要退回做法一。</li>
+<li>从 Studio 局域网直接发的任务，<code>url</code> 是打印机本地路径，要用 FTPS 从打印机下载，云模式下的 P2S 能不能这样取还没测。</li>
+<li>如果还想顺便把打印机的外置料盘设置改对（<code>ams_filament_setting</code> 命令），就是向打印机写命令了，要另外决定。</li>
+</ul>
+<h3 id="43-做法三外置料盘多色换料待验证">4.3 做法三：外置料盘多色换料（待验证）</h3>
+<p><strong>思路</strong>：如果 P2S 允许多色任务的几种耗材都映射到外置料盘，并在每次换色时暂停、提示手动换料，那么换色时的消息（<code>ams_change_filament</code>、<code>extruder.star</code>、<code>print_error</code>）里很可能写着下一种要什么耗材。这样就能做到：A 台退料 → B 台进料，自动多色打印。</p>
+<p><strong>先做的实验</strong>：切一个两色的小模型，两种颜色都映射到外置料盘（看 Studio 是否允许），开着监听程序打印一次，记录换色时的完整消息。</p>
+<h2 id="5-顺带要做的改进单台也有用">5. 顺带要做的改进（单台也有用）</h2>
+<ol>
+<li><strong>中途接入</strong>：SEMI-AMS 重启或者打印开始后才连上打印机时，会错过 <code>project_file</code>。如果连上后看到 <code>gcode_state</code> 是 RUNNING / PREPARE、<code>mapping</code> 里有外置料盘、挤出机里有耗材，而本机有料，就进入"打印中"继续补料。多台时还要先通过做法一的匹配。</li>
+<li><strong><code>0x07FFC006</code>（打印机在等外置料盘的耗材）</strong>：本机该送料却还没在送（例如错过了开始打印），就开始送料；已经在送就不处理。要防止和用户手动操作冲突，例如只在进料阶段（<code>stg_cur</code> 4）响应。</li>
+<li><strong>点灯 App 显示打印进度</strong>：任务名、进度百分比、剩余时间、当前层。</li>
+</ol>
+<h2 id="6-实施顺序">6. 实施顺序</h2>
+<ol>
+<li>做 4.1 节的三个测试，结果补进 <a href="拓竹MQTT消息参考.html">拓竹MQTT消息参考</a>。</li>
+<li>固件：做法一 + 第 5 节的 1、2 条，补仿真测试，单台先上板验证不受影响。</li>
+<li>机械：合流件、各台的退料距离（<code>unload_extra_ms</code>）、首次送料超时。</li>
+<li>两台上板联调：切换外置料盘设置 → 打印 → 退料，确认只有一台动作。</li>
+<li>视需要再做做法二的协调程序、做法三的实验。</li>
+</ol>
+<h2 id="7-未决问题">7. 未决问题</h2>
+<ul>
+<li>打印机允许几个 MQTT 客户端同时连接？</li>
+<li><code>vir_slot</code> 在屏幕、App、Studio 上修改后多久更新？Studio 发送任务时会不会改它？</li>
+<li>两台装同样耗材时谁送：固定优先级，还是做续料？</li>
+<li>每台的缓冲器在合流件之前，合流件到打印机这一段没有缓冲。被选中的那台照常按自己的缓冲器补料，按理没有问题，要实际试。</li>
+<li>没被选中的进料器料头停在哪里才不会挡路，<code>unload_extra_ms</code> 要多大。</li>
+</ul>
+  </main>
+</div>
+<button class="theme-toggle" type="button" aria-label="切换深色/浅色">深色 / 浅色</button>
+<script>
+(function(){
+  var toc=document.querySelector('.toc');
+  if(window.matchMedia('(max-width: 1000px)').matches) toc.removeAttribute('open');
+
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='复制';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1200)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,function(){})}
+    });
+    pre.appendChild(b);
+  });
+
+  var root=document.documentElement, btn=document.querySelector('.theme-toggle');
+  try{var saved=localStorage.getItem('semi-doc-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('semi-doc-theme',next)}catch(e){}
+  });
+
+  var links={}; document.querySelectorAll('.toc a').forEach(function(a){links[decodeURIComponent(a.getAttribute('href').slice(1))]=a});
+  var heads=[].slice.call(document.querySelectorAll('main h2[id], main h3[id]'));
+  if('IntersectionObserver' in window){
+    var current=null;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ current=e.target.id; } });
+      Object.keys(links).forEach(function(k){links[k].classList.toggle('active',k===current)});
+    },{rootMargin:'0px 0px -70% 0px'});
+    heads.forEach(function(h){io.observe(h)});
+  }
+})();
+</script>
+</body>
+</html>

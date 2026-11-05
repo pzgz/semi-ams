@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""把 SEMI-AMS固件文档.md 生成为单文件 HTML（Mermaid 图预先渲染成内嵌 SVG，离线可看）。
+"""把 docs 里的 Markdown 文档生成为单文件 HTML（Mermaid 图预先渲染成内嵌 SVG，离线可看）。
 
 依赖：  pip3 install markdown        npm install -g @mermaid-js/mermaid-cli
-用法：  python3 docs/build_html.py
+用法：  python3 docs/build_html.py              生成 docs 里所有 .md 对应的 .html
+        python3 docs/build_html.py 文件.md ...   只生成指定的文档
 """
 import html
 import json
@@ -16,8 +17,6 @@ import markdown
 from markdown.extensions.toc import slugify_unicode
 
 HERE = Path(__file__).resolve().parent
-SRC = HERE / "SEMI-AMS固件文档.md"
-OUT = HERE / "SEMI-AMS固件文档.html"
 
 MERMAID_CONFIG = {
     "theme": "neutral",
@@ -47,6 +46,12 @@ def render_mermaid(blocks):
 
 
 def main():
+    srcs = [Path(a).resolve() for a in sys.argv[1:]] or sorted(HERE.glob("*.md"))
+    for src in srcs:
+        build(src, src.with_suffix(".html"))
+
+
+def build(SRC, OUT):
     text = SRC.read_text(encoding="utf-8")
 
     blocks = []
@@ -62,6 +67,8 @@ def main():
         extension_configs={"toc": {"slugify": slugify_unicode, "toc_depth": "2-3"}},
     )
     body = md.convert(text)
+    # 文档之间的链接：.md 换成生成的 .html
+    body = re.sub(r'href="([^":#]+)\.md(#[^"]*)?"', lambda m: f'href="{m.group(1)}.html{m.group(2) or ""}"', body)
     toc = md.toc.replace('<div class="toc">', '<div class="toc-list">')
 
     svgs = render_mermaid(blocks)

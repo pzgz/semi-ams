@@ -1,6 +1,6 @@
 # SEMI-AMS 复刻固件
 
-ESP-12S（ESP8266）控制板的开源复刻固件。完整的需求、设计，以及在 Mac 上编译、烧录、测试的步骤，见 [`docs/SEMI-AMS固件文档.md`](docs/SEMI-AMS固件文档.md)；浏览器版是同目录下的 `.html` 文件。功能对照原厂"远程控制版本（支持 MQTT）"（不含 TPU 助力），沿用原来的配网方式和点灯 Blinker App 界面。同时修掉了原固件"磁铁到位却检测不到，要拿开再靠近"的问题，原因分析见文档 1.3 节。
+ESP-12S（ESP8266）控制板的开源复刻固件。完整的需求、设计，以及在 Mac 上编译、烧录、测试的步骤，见 [`docs/SEMI-AMS固件文档.md`](docs/SEMI-AMS固件文档.md)；拓竹打印机 MQTT 消息的实测整理见 [`docs/拓竹MQTT消息参考.md`](docs/拓竹MQTT消息参考.md)；多台 SEMI-AMS 协同的方案（待实施）见 [`docs/多台SEMI-AMS协同方案.md`](docs/多台SEMI-AMS协同方案.md)。浏览器版是同目录下的 `.html` 文件（`python3 docs/build_html.py` 生成）。功能对照原厂"远程控制版本（支持 MQTT）"（不含 TPU 助力），沿用原来的配网方式和点灯 Blinker App 界面。同时修掉了原固件"磁铁到位却检测不到，要拿开再靠近"的问题，原因分析见文档 1.3 节。
 
 ## 和原固件相比
 

@@ -1,0 +1,1081 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拓竹 P2S 本地 MQTT 消息参考（实测整理）</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#646a73; --border:#e3e5e9;
+  --accent:#1a5fd6; --accent-weak:#e9f0fd; --code-bg:#f1f3f5; --code-text:#24292f;
+  --row:#fafbfc; --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+    --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+    --row:#1e2128; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+  --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+  --row:#1e2128; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px 14px 6px;box-shadow:var(--shadow);font-size:13.5px}
+.toc summary{list-style:none;cursor:pointer;font-weight:600;padding:2px 12px 8px;color:var(--text)}
+.toc summary::-webkit-details-marker{display:none}
+.toc ul{list-style:none;margin:0;padding-left:12px}
+.toc-list>ul{padding-left:4px}
+.toc-list>ul>li{margin-top:6px}
+.toc-list>ul>li>a{color:var(--text);font-weight:600}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:3px 8px;border-radius:6px;color:var(--muted);text-decoration:none;line-height:1.45}
+.toc a:hover{background:var(--accent-weak);color:var(--text)}
+.toc a.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+main{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:36px 44px 48px;box-shadow:var(--shadow);min-width:0}
+h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
+h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:30px 0 10px}
+h2+h3{margin-top:16px}
+h4{font-size:15px;margin:22px 0 8px}
+h3+h4{margin-top:12px}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+hr{display:none}
+strong{font-weight:650}
+ul,ol{padding-left:1.4em}
+li{margin:3px 0}
+code{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);color:var(--code-text);
+  padding:.12em .4em;border-radius:5px;word-break:break-word}
+pre{position:relative;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.55}
+pre code{background:none;padding:0;font-size:13px;word-break:normal;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  font-size:12px;border-radius:6px;padding:2px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus{opacity:1}
+.table-wrap{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--row);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even) td{background:var(--row)}
+td code{white-space:nowrap}
+figure.diagram{margin:18px 0 22px;padding:16px;background:#fff;color:#1f2329;color-scheme:light;border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+figure.diagram svg{max-width:100%;height:auto}
+figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figure.diagram svg foreignObject p{color:#1f2329}
+.theme-toggle{position:fixed;right:16px;bottom:16px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width: 1000px){
+  .layout{grid-template-columns:1fr;padding:16px 16px 72px;gap:14px}
+  .toc{position:static;max-height:none}
+  main{padding:22px 18px 32px;border-radius:12px}
+  h1{font-size:23px}
+  h2{font-size:19px}
+  figure.diagram{padding:10px}
+  figure.diagram svg{min-width:560px}
+}
+@media print{
+  body{background:#fff}
+  .toc,.theme-toggle,.copy{display:none}
+  .layout{display:block;padding:0}
+  main{border:none;box-shadow:none;padding:0}
+  h2{break-after:avoid}
+  pre,figure,.table-wrap{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <details class="toc" open>
+    <summary>目录</summary>
+    <div class="toc-list">
+<ul>
+<li><a href="#1-连接">1. 连接</a><ul>
+<li><a href="#11-消息种类按顶层键">1.1 消息种类（按顶层键）</a></li>
+</ul>
+</li>
+<li><a href="#2-打印状态-push_status">2. 打印状态 push_status</a><ul>
+<li><a href="#21-打印进度">2.1 打印进度</a></li>
+<li><a href="#22-阶段-stg_cur">2.2 阶段 stg_cur</a></li>
+<li><a href="#23-耗材和挤出机">2.3 耗材和挤出机</a></li>
+<li><a href="#24-错误和提示">2.4 错误和提示</a></li>
+<li><a href="#25-其它字段目前用不到">2.5 其它字段（目前用不到）</a></li>
+</ul>
+</li>
+<li><a href="#3-命令回报">3. 命令回报</a></li>
+<li><a href="#4-实测时间线">4. 实测时间线</a><ul>
+<li><a href="#41-外置料盘完整打印21272221">4.1 外置料盘完整打印（21:27–22:21）</a></li>
+<li><a href="#42-进料阶段外置料盘没有送到19201923">4.2 进料阶段外置料盘没有送到（19:20–19:23）</a></li>
+<li><a href="#43-中途停止打印17401925">4.3 中途停止打印（17:40、19:25）</a></li>
+<li><a href="#44-在屏幕上退外置料盘19252219">4.4 在屏幕上退外置料盘（19:25、22:19）</a></li>
+</ul>
+</li>
+<li><a href="#5-semi-ams-用到的判断">5. SEMI-AMS 用到的判断</a></li>
+<li><a href="#6-和旧资料不一样的地方p2s">6. 和旧资料不一样的地方（P2S）</a></li>
+</ul>
+</div>
+
+  </details>
+  <main>
+<h1 id="拓竹-p2s-本地-mqtt-消息参考实测整理">拓竹 P2S 本地 MQTT 消息参考（实测整理）</h1>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>打印机</td>
+<td>Bambu Lab P2S，固件 01.03.00.00；AMS 2 Pro 一台（固件 05.00.22.22）；喷嘴 HH01 0.4mm</td>
+</tr>
+<tr>
+<td>打印机模式</td>
+<td>正常连接拓竹云（<strong>没有</strong>开开发者模式，也没有切到仅局域网模式）</td>
+</tr>
+<tr>
+<td>采集日期</td>
+<td>2026-11-05，三段记录共 5954 条消息</td>
+</tr>
+<tr>
+<td>采集工具</td>
+<td><code>tools/bambu_listen.py</code>（只读，连接时发一次 <code>pushall</code>），原始记录 <code>bambu_log_*.jsonl</code></td>
+</tr>
+<tr>
+<td>用途</td>
+<td>SEMI-AMS 固件判断开始送料、退料的依据；以后做多台协同（见 <a href="多台SEMI-AMS协同方案.html">多台SEMI-AMS协同方案</a>）、显示打印进度时查字段</td>
+</tr>
+</tbody>
+</table></div>
+<p>本文只写实测看到的内容。字段含义标"推测"的，是根据前后变化推出来的，没有官方资料证实；标"参考 ha-bambulab"的，取自 Home Assistant 拓竹插件的常量表，没有逐一核实。</p>
+<p><strong>原始记录不要外传</strong>：里面有打印机序列号、拓竹云视频直播的会话密钥（<code>liveview</code> 消息）、带签名的文件下载链接和证书。<code>.gitignore</code> 已经排除 <code>bambu_log_*.jsonl</code>。本文中的序列号等已替换成 <code>&lt;序列号&gt;</code>。</p>
+<hr />
+<h2 id="1-连接">1. 连接</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>实测情况</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>地址</td>
+<td><code>&lt;打印机IP&gt;:8883</code>，TLS，打印机用自签名证书（客户端不校验证书）</td>
+</tr>
+<tr>
+<td>登录</td>
+<td>用户名 <code>bblp</code>，密码是打印机屏幕上的访问码（配对码）；客户端 ID 随意</td>
+</tr>
+<tr>
+<td>订阅</td>
+<td><code>device/&lt;序列号&gt;/report</code>（打印机发出的所有消息）</td>
+</tr>
+<tr>
+<td>发送</td>
+<td><code>device/&lt;序列号&gt;/request</code>。SEMI-AMS 只发 <code>pushall</code>（请求完整状态），不发控制命令</td>
+</tr>
+<tr>
+<td>云模式下可用</td>
+<td>是。打印机连着拓竹云，局域网 MQTT 照样能读</td>
+</tr>
+<tr>
+<td>同时连接</td>
+<td>SEMI-AMS 和电脑上的监听程序同时连接没有问题（至少 2 个客户端）。上限没测</td>
+</tr>
+<tr>
+<td>TLS 分片协商（MFLN）</td>
+<td>支持。客户端可以只用 1KB 接收缓冲（ESP8266 必须用到这一点，否则要 16KB）</td>
+</tr>
+<tr>
+<td>消息频率</td>
+<td><code>print</code> 消息<strong>每秒一条</strong>，几乎每条都是完整状态（平均 7.8KB，最大 8.2KB）。比旧资料里"P 系列只发变化的字段"多得多</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="11-消息种类按顶层键">1.1 消息种类（按顶层键）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>顶层键</th>
+<th>条数</th>
+<th>大小</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>print</code></td>
+<td>4576</td>
+<td>100–8208 字节</td>
+<td>打印状态 <code>push_status</code>（绝大多数），以及打印机收到的命令回报（见第 3 节）</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>1342</td>
+<td>约 200 字节</td>
+<td><code>ledctrl</code>：灯光控制回报（<code>chamber_light</code> 腔体灯）</td>
+</tr>
+<tr>
+<td><code>info</code></td>
+<td>19</td>
+<td>1.3KB</td>
+<td><code>get_version</code>：各模块的型号、序列号、固件版本</td>
+</tr>
+<tr>
+<td><code>liveview</code></td>
+<td>11</td>
+<td>0.5–1.4KB</td>
+<td>视频直播会话（<strong>含密钥</strong>）</td>
+</tr>
+<tr>
+<td><code>camera</code></td>
+<td>4</td>
+<td>240 字节</td>
+<td><code>ipcam_get_media_info</code>：延时摄影存储空间</td>
+</tr>
+<tr>
+<td><code>security</code></td>
+<td>2</td>
+<td>0.3–1.2KB</td>
+<td><code>app_cert_list</code> / <code>app_cert_install</code>：证书</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="2-打印状态-push_status">2. 打印状态 <code>push_status</code></h2>
+<p><code>{"print":{"command":"push_status", ...}}</code>。下面按用途分组，只列有用或者已经搞清楚的字段。</p>
+<h3 id="21-打印进度">2.1 打印进度</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>实测值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gcode_state</code></td>
+<td><code>FAILED</code>、<code>PREPARE</code>、<code>RUNNING</code>、<code>FINISH</code></td>
+<td>打印状态。取消后停在 <code>FAILED</code>、打完停在 <code>FINISH</code>，直到下一次打印；<strong>没有见到 <code>IDLE</code></strong>。<code>PREPARE</code> 只持续 2–4 秒</td>
+</tr>
+<tr>
+<td><code>stg_cur</code></td>
+<td>见 2.2 节</td>
+<td>当前阶段，<code>-1</code> = 不在打印，<code>0</code> = 正在打印</td>
+</tr>
+<tr>
+<td><code>stg</code></td>
+<td><code>[2,13,11,4,8,14,3,54,1,51]</code></td>
+<td>这次任务要经过的阶段列表</td>
+</tr>
+<tr>
+<td><code>mc_print_stage</code> / <code>mc_stage</code></td>
+<td><code>1</code> 空闲，<code>2</code> 打印中</td>
+<td></td>
+</tr>
+<tr>
+<td><code>mc_percent</code> / <code>percent</code></td>
+<td><code>45</code></td>
+<td>进度百分比</td>
+</tr>
+<tr>
+<td><code>mc_remaining_time</code> / <code>remain_time</code></td>
+<td><code>26</code></td>
+<td>剩余时间（分钟）</td>
+</tr>
+<tr>
+<td><code>layer_num</code> / <code>total_layer_num</code></td>
+<td><code>22</code> / <code>126</code></td>
+<td>当前层 / 总层数（<code>3D</code> 字段里也有一份）</td>
+</tr>
+<tr>
+<td><code>subtask_name</code></td>
+<td>模型名称</td>
+<td>任务名（MakerWorld 模型名）</td>
+</tr>
+<tr>
+<td><code>gcode_file</code> / <code>file</code></td>
+<td><code>/data/Metadata/plate_2.gcode</code></td>
+<td>正在打印的 gcode</td>
+</tr>
+<tr>
+<td><code>plate_idx</code> / <code>plate_id</code> / <code>plate_cnt</code></td>
+<td><code>2</code> / <code>2</code> / <code>2</code></td>
+<td>第几块板 / 共几块</td>
+</tr>
+<tr>
+<td><code>print_type</code></td>
+<td><code>cloud</code></td>
+<td>云打印（App / MakerWorld 发起）</td>
+</tr>
+<tr>
+<td><code>job_id</code> / <code>task_id</code> / <code>subtask_id</code> / <code>project_id</code> / <code>profile_id</code></td>
+<td>数字字符串</td>
+<td>任务编号</td>
+</tr>
+<tr>
+<td><code>nozzle_temper</code> / <code>nozzle_target_temper</code></td>
+<td><code>255.0</code> / <code>255.0</code></td>
+<td>喷嘴温度（PETG）</td>
+</tr>
+<tr>
+<td><code>bed_temper</code> / <code>bed_target_temper</code></td>
+<td><code>70.0</code> / <code>70.0</code></td>
+<td>热床温度</td>
+</tr>
+<tr>
+<td><code>spd_lvl</code> / <code>spd_mag</code></td>
+<td><code>2</code> / <code>100</code></td>
+<td>速度档位 / 百分比</td>
+</tr>
+<tr>
+<td><code>nozzle_type</code> / <code>nozzle_diameter</code></td>
+<td><code>HH01</code> / <code>0.4</code></td>
+<td>喷嘴型号 / 直径</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="22-阶段-stg_cur">2.2 阶段 <code>stg_cur</code></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>值</th>
+<th>含义（参考 ha-bambulab）</th>
+<th>实测出现的时机</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-1</code></td>
+<td>不在打印</td>
+<td>空闲、取消后、打完后</td>
+</tr>
+<tr>
+<td><code>13</code></td>
+<td>归位</td>
+<td>开始打印后最先出现，约 1 分钟</td>
+</tr>
+<tr>
+<td><code>11</code></td>
+<td>识别打印板</td>
+<td>归位后，约 7 秒</td>
+</tr>
+<tr>
+<td><code>4</code></td>
+<td><strong>换料（进料）</strong></td>
+<td>把耗材送进挤出机，约 1.5 分钟；外置料盘没送到时停在这里报 <code>0x07FFC006</code></td>
+</tr>
+<tr>
+<td><code>8</code></td>
+<td>挤出校准</td>
+<td>进料后，约 20 秒</td>
+</tr>
+<tr>
+<td><code>14</code></td>
+<td>清洁喷嘴</td>
+<td>约 1.5 分钟</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>振动补偿</td>
+<td>约 25 秒</td>
+</tr>
+<tr>
+<td><code>54</code></td>
+<td>未知（P2S 新增）</td>
+<td>振动补偿后约 6 秒</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>自动调平</td>
+<td>约 1 分钟</td>
+</tr>
+<tr>
+<td><code>51</code></td>
+<td>未知（P2S 新增）</td>
+<td>调平后、开始打印前约 40 秒</td>
+</tr>
+<tr>
+<td><code>0</code></td>
+<td>正在打印</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="23-耗材和挤出机">2.3 耗材和挤出机</h3>
+<p><strong><code>hw_switch_state</code></strong>（打印机挤出机前的耗材传感器）</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>2</code></td>
+<td>挤出机里没有耗材</td>
+</tr>
+<tr>
+<td><code>3</code></td>
+<td>挤出机里有耗材</td>
+</tr>
+</tbody>
+</table></div>
+<p>bit0 = 有耗材；bit1 在 P2S 上一直是 1（推测：传感器存在）。</p>
+<p><strong><code>device.extruder.info[0]</code></strong>（P2S 的新协议字段，比 <code>hw_switch_state</code> 信息多）</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>实测值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>0</code></td>
+<td>挤出机编号（P2S 只有一个）</td>
+</tr>
+<tr>
+<td><code>snow</code></td>
+<td><code>65535</code> / <code>65280</code></td>
+<td><strong>当前料盘</strong>。高 8 位是料盘组，低 8 位是槽位：<code>0xFFFF</code>（65535）= 无，<code>0xFF00</code>（65280）= 外置料盘（组 255、槽 0）。按这个格式，AMS 第 1 台第 3 槽应该是 <code>0x0002</code>（未实测）</td>
+</tr>
+<tr>
+<td><code>spre</code></td>
+<td>同上</td>
+<td>上一个料盘</td>
+</tr>
+<tr>
+<td><code>star</code></td>
+<td>同上</td>
+<td>目标料盘。进料时先变成目标，进好后 <code>snow</code> 才跟着变；退料时先变成 <code>0xFFFF</code></td>
+</tr>
+<tr>
+<td><code>info</code></td>
+<td><code>1032</code>、<code>1102</code> 等</td>
+<td>状态位，见下表</td>
+</tr>
+<tr>
+<td><code>temp</code></td>
+<td><code>16711935</code>、<code>107</code></td>
+<td><strong>打包的喷嘴温度</strong>：高 16 位是目标温度，低 16 位是当前温度。<code>16711935</code> = <code>0x00FF00FF</code> = 目标 255℃、当前 255℃；<code>107</code> = 目标 0、当前 107℃（在降温）</td>
+</tr>
+<tr>
+<td><code>stat</code></td>
+<td><code>197376</code> 等</td>
+<td>未知</td>
+</tr>
+<tr>
+<td><code>hnow</code> / <code>hpre</code> / <code>htar</code></td>
+<td><code>0</code></td>
+<td>推测：当前 / 上一个 / 目标热端编号</td>
+</tr>
+<tr>
+<td><code>filam_bak</code></td>
+<td><code>[]</code></td>
+<td>推测：备用耗材（自动续料）</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>info</code> 的位（基于 4400 多条记录对照 <code>hw_switch_state</code>）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>位</th>
+<th>判断</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bit1（<code>0x002</code>）</td>
+<td><strong>挤出机里有耗材</strong>，和 <code>hw_switch_state</code> 完全一致（只在变化的那一秒有先后）。SEMI-AMS 用的就是这一位</td>
+</tr>
+<tr>
+<td>bit3（<code>0x008</code>）、bit10（<code>0x400</code>）</td>
+<td>一直是 1</td>
+</tr>
+<tr>
+<td>bit2（<code>0x004</code>）</td>
+<td>含义未知：打印中为 1；耗材离开挤出机（bit1 清零）后约 20 秒才清零</td>
+</tr>
+<tr>
+<td>bit5、bit6（<code>0x020</code>、<code>0x040</code>）</td>
+<td>随加热、换料阶段变化，含义未知</td>
+</tr>
+</tbody>
+</table></div>
+<p>实测出现过的值：空闲无料 <code>1032</code>（0x408）；打印中 <code>1102</code>（0x44E）；其它 <code>1034 1036 1038 1064 1066 1068 1070 1096 1098 1100 1128 1130 1134</code>。</p>
+<p><strong><code>ams.tray_now</code> / <code>tray_tar</code> / <code>tray_pre</code></strong>（字符串）</p>
+<p><code>"255"</code> = 无。<strong>用外置料盘时 P2S 报的是 <code>"0"</code></strong>，和 AMS 第 1 槽一样，分不出来。老资料里外置料盘是 <code>"254"</code>，在 P2S 上不成立。所以 P2S 上判断"是不是外置料盘"要用 <code>extruder.info[].snow</code>，不能用 <code>tray_now</code>。</p>
+<p><strong><code>mapping</code></strong>：当前任务的耗材映射，格式和 <code>snow</code> 一样。实测 <code>[65535, 65280]</code>：切片里第 1 种耗材没用，第 2 种耗材 → 外置料盘。打印过程中每条状态都带着它。</p>
+<p><strong><code>vir_slot</code></strong>：外置料盘的耗材设置（在打印机屏幕、App 或 Studio 里设置的），格式和 AMS 料盘一样：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>实测值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>"255"</code></td>
+<td>外置料盘</td>
+</tr>
+<tr>
+<td><code>tray_type</code></td>
+<td><code>PETG</code></td>
+<td>耗材类型</td>
+</tr>
+<tr>
+<td><code>tray_color</code> / <code>cols</code></td>
+<td><code>057748FF</code> / <code>["057748FF"]</code></td>
+<td>颜色 RRGGBBAA（深绿）</td>
+</tr>
+<tr>
+<td><code>tray_info_idx</code></td>
+<td><code>GFG99</code></td>
+<td>耗材预设编号（拓竹的耗材 ID）</td>
+</tr>
+<tr>
+<td><code>nozzle_temp_min</code> / <code>nozzle_temp_max</code></td>
+<td><code>220</code> / <code>270</code></td>
+<td>喷嘴温度范围</td>
+</tr>
+<tr>
+<td><code>tray_diameter</code> / <code>total_len</code></td>
+<td><code>1.75</code> / <code>330000</code></td>
+<td>直径 / 总长度</td>
+</tr>
+<tr>
+<td><code>remain</code> / <code>tray_weight</code></td>
+<td><code>0</code> / <code>0</code></td>
+<td>外置料盘没有余量信息</td>
+</tr>
+<tr>
+<td><code>tag_uid</code> / <code>tray_uuid</code></td>
+<td>全 0</td>
+<td>外置料盘没有 RFID</td>
+</tr>
+</tbody>
+</table></div>
+<p>三段记录里 <code>vir_slot</code> 一直没变过。改了外置料盘设置后它会不会马上更新，还没测。</p>
+<p><strong><code>ams</code></strong>（AMS 信息）</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>实测值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ams[].id</code> / <code>info</code></td>
+<td><code>"0"</code> / <code>"10002003"</code></td>
+<td>第几台 AMS / 状态</td>
+</tr>
+<tr>
+<td><code>ams[].temp</code> / <code>humidity</code> / <code>humidity_raw</code></td>
+<td><code>26.4</code> / <code>"2"</code> / <code>"36"</code></td>
+<td>温度、湿度等级、湿度 %</td>
+</tr>
+<tr>
+<td><code>ams[].dry_*</code></td>
+<td></td>
+<td>烘干设置</td>
+</tr>
+<tr>
+<td><code>ams[].tray[]</code></td>
+<td>4 个槽</td>
+<td>每槽的 <code>tray_type</code>、<code>tray_color</code>、<code>tray_info_idx</code>、<code>remain</code>、<code>tag_uid</code> 等，格式同 <code>vir_slot</code></td>
+</tr>
+<tr>
+<td><code>ams_exist_bits</code> / <code>tray_exist_bits</code> / <code>tray_is_bbl_bits</code></td>
+<td><code>"1"</code> / <code>"f"</code> / <code>"f"</code></td>
+<td>哪几台 AMS 在、哪几个槽有料、哪几个槽是拓竹耗材</td>
+</tr>
+</tbody>
+</table></div>
+<p>实测 AMS 的 4 个槽：PETG 白（GFG03）、PLA 黄、PLA 白、PLA 橙（GFA06）。</p>
+<p><strong><code>ams_status</code></strong>（<code>print</code> 下的顶层字段，不是 <code>ams</code> 里面的）</p>
+<p>高字节是大状态，低字节是步骤（推测）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>值</th>
+<th>十六进制</th>
+<th>实测出现的时机</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code></td>
+<td><code>0x000</code></td>
+<td>空闲</td>
+</tr>
+<tr>
+<td><code>258</code></td>
+<td><code>0x102</code></td>
+<td>换料开始（加热），进料和退料都有</td>
+</tr>
+<tr>
+<td><code>259</code></td>
+<td><code>0x103</code></td>
+<td>退料：切断（推测）</td>
+</tr>
+<tr>
+<td><code>260</code></td>
+<td><code>0x104</code></td>
+<td>退料：回抽，之后报 <code>0x07FFC003</code> 等人拔料</td>
+</tr>
+<tr>
+<td><code>261</code></td>
+<td><code>0x105</code></td>
+<td>进料：<strong>等外置料盘的耗材送进来</strong>（同时报 <code>0x07FFC006</code>）</td>
+</tr>
+<tr>
+<td><code>263</code></td>
+<td><code>0x107</code></td>
+<td>进料：耗材已到，挤出冲刷（推测），和 <code>258</code> 交替几次</td>
+</tr>
+<tr>
+<td><code>768</code></td>
+<td><code>0x300</code></td>
+<td>打印中</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="24-错误和提示">2.4 错误和提示</h3>
+<p><strong><code>print_error</code></strong>（十进制整数，下表写成十六进制）</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>值</th>
+<th>含义</th>
+<th>实测情况</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x0300400C</code></td>
+<td>打印任务已取消</td>
+<td>停止打印后 3–5 秒出现，之后被清除变回 0（多数时候能看到 App 发的 <code>clean_print_error</code>）</td>
+</tr>
+<tr>
+<td><code>0x07FFC003</code></td>
+<td><strong>请从挤出机拔出外置料盘的耗材</strong></td>
+<td>外置料盘退料的最后一步：打印机切断、回抽完以后报这个并一直等着，耗材离开挤出机后自动清除。SEMI-AMS 收到就马上退料</td>
+</tr>
+<tr>
+<td><code>0x07FFC006</code></td>
+<td><strong>请把外置料盘的耗材送进挤出机</strong>（推测）</td>
+<td>进料阶段（<code>stg_cur</code> 4，<code>ams_status</code> 261）耗材迟迟不到时出现；在 App 点"继续"（<code>ams_control</code> resume）后清除</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>hms</code></strong>（<code>[{"attr":…, "code":…}]</code>，按拓竹 Wiki 的写法 <code>attr 高16位-低16位-code 高16位-低16位</code>）</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>HMS</th>
+<th>伴随的 <code>print_error</code></th>
+<th>实测情况</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>07FF-2000-0002-0004</code></td>
+<td><code>0x07FFC003</code></td>
+<td>请拔出外置料盘耗材</td>
+</tr>
+<tr>
+<td><code>07FF-2000-0002-0002</code></td>
+<td><code>0x07FFC006</code></td>
+<td>等外置料盘耗材送入</td>
+</tr>
+<tr>
+<td><code>0C00-0300-0002-0014</code></td>
+<td>无</td>
+<td>从开始打印到打完一直存在；<code>0C00</code> 是摄像头/AI 检测模块，具体含义查拓竹 Wiki</td>
+</tr>
+<tr>
+<td><code>0300-9600-0003-0001</code></td>
+<td>无</td>
+<td>进料阶段短暂出现，含义未知</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="25-其它字段目前用不到">2.5 其它字段（目前用不到）</h3>
+<p><code>fan_gear</code>、<code>cooling_fan_speed</code>、<code>big_fan1_speed</code>、<code>big_fan2_speed</code>、<code>heatbreak_fan_speed</code>（风扇）；<code>lights_report</code>（灯）；<code>ipcam</code>、<code>xcam</code>、<code>xcam_status</code>（摄像头、AI 检测）；<code>sdcard</code>；<code>upgrade_state</code>（固件升级）；<code>net</code>（网络，<strong>含 IP</strong>）；<code>wifi_signal</code>；<code>online</code>；<code>care</code>（保养计数）；<code>queue*</code>（打印队列）；<code>device.nozzle</code>（喷嘴型号、磨损）；<code>device.toolhead</code>（打印头位置）；<code>device.ctc</code>（腔体温度）；<code>fun</code>、<code>fun2</code>、<code>cfg</code>、<code>aux</code>、<code>stat</code>（功能位，未知）。</p>
+<hr />
+<h2 id="3-命令回报">3. 命令回报</h2>
+<p>打印机收到 App、Studio 或云端发来的命令后，会把命令内容连同结果发到 <code>report</code> 主题。它们和 <code>push_status</code> 在同一个 <code>print</code> 键下，靠 <code>command</code> 区分。实测见到的：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>command</code></th>
+<th>什么时候</th>
+<th>关键字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>project_file</code></td>
+<td><strong>开始打印</strong></td>
+<td>见下文</td>
+</tr>
+<tr>
+<td><code>gcode_line</code></td>
+<td>开始打印前后很多条</td>
+<td><code>result</code>、<code>return_code</code>（App 或云端发的内部 gcode，内容不回报）</td>
+</tr>
+<tr>
+<td><code>stop</code></td>
+<td>停止打印</td>
+<td><code>result</code></td>
+</tr>
+<tr>
+<td><code>clean_print_error</code></td>
+<td>在 App 上清除错误</td>
+<td><code>print_error</code>（被清除的错误码）</td>
+</tr>
+<tr>
+<td><code>ams_control</code></td>
+<td>在 App 上点"继续"</td>
+<td><code>param: "resume"</code></td>
+</tr>
+<tr>
+<td><code>ams_change_filament</code></td>
+<td><strong>换料 / 退料</strong></td>
+<td><code>ams_id</code>、<code>slot_id</code>、<code>target</code>、<code>soft_temp</code>、<code>temper_check</code>、<code>errno</code>。实测在屏幕上退外置料盘：<code>ams_id 255, slot_id 255, target 255</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>project_file</code></strong>（开始打印）的字段：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>实测值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>use_ams</code></td>
+<td><code>true</code></td>
+<td>注意：用外置料盘时也是 <code>true</code>，不能只看它</td>
+</tr>
+<tr>
+<td><code>ams_mapping</code></td>
+<td><code>[-1, 255]</code></td>
+<td>切片里每种耗材对应的料盘（老格式）：<code>-1</code> 没用，<code>255</code> 外置料盘</td>
+</tr>
+<tr>
+<td><code>ams_mapping2</code></td>
+<td><code>[{ams_id:255,slot_id:255},{ams_id:255,slot_id:0}]</code></td>
+<td>新格式：<code>slot_id 255</code> = 没用；<code>ams_id 255, slot_id 0</code> = 外置料盘</td>
+</tr>
+<tr>
+<td><code>param</code></td>
+<td><code>Metadata/plate_2.gcode</code></td>
+<td>3MF 里的哪块板</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td><code>https://…oss-cn-shanghai.aliyuncs.com/makerworld/…/xxx.3mf?X-Amz-…&amp;X-Amz-Expires=3600…</code></td>
+<td><strong>打印文件的下载链接</strong>。云打印（MakerWorld）时是带签名的 HTTPS 链接，1 小时内有效。3MF 里的 <code>Metadata/slice_info.config</code> 写着这块板用到的每种耗材的类型、颜色、预设编号和用量。从 Studio 局域网直接发的任务，这里是打印机本地路径（未实测）</td>
+</tr>
+<tr>
+<td><code>md5</code></td>
+<td></td>
+<td>3MF 的 MD5</td>
+</tr>
+<tr>
+<td><code>subtask_name</code>、<code>design_id</code>、<code>model_id</code>、<code>profile_id</code>、<code>project_id</code>、<code>job_id</code>、<code>task_id</code>、<code>plate_idx</code></td>
+<td></td>
+<td>任务信息</td>
+</tr>
+<tr>
+<td><code>bed_leveling</code>、<code>flow_cali</code>、<code>vibration_cali</code>、<code>layer_inspect</code>、<code>timelapse</code>、<code>auto_bed_leveling</code>、<code>extrude_cali_flag</code>、<code>nozzle_offset_cali</code></td>
+<td></td>
+<td>打印选项</td>
+</tr>
+<tr>
+<td><code>dev_id</code></td>
+<td><code>&lt;序列号&gt;</code></td>
+<td>打印机序列号</td>
+</tr>
+<tr>
+<td><code>is_from_mqtt</code></td>
+<td><code>true</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>result</code></td>
+<td><code>SUCCESS</code></td>
+<td>命令执行结果；失败时 SEMI-AMS 不送料</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="4-实测时间线">4. 实测时间线</h2>
+<h3 id="41-外置料盘完整打印21272221">4.1 外置料盘完整打印（21:27–22:21）</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>打印机消息</th>
+<th>SEMI-AMS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>21:27:00</td>
+<td><code>project_file</code>，<code>ams_mapping2</code> 有外置料盘</td>
+<td>开始送料到满</td>
+</tr>
+<tr>
+<td>21:27:01</td>
+<td><code>gcode_state</code> FAILED → PREPARE</td>
+<td></td>
+</tr>
+<tr>
+<td>21:27:05</td>
+<td>→ RUNNING</td>
+<td></td>
+</tr>
+<tr>
+<td>21:27:12</td>
+<td><code>stg_cur</code> 13（归位）；<code>info</code> 1032 → 1064</td>
+<td></td>
+</tr>
+<tr>
+<td>21:27:41</td>
+<td><code>hw_switch_state</code> 2 → 3；<code>snow</code> → 65280；<code>tray_now</code> 255 → 0；<code>info</code> → 1102</td>
+<td>耗材已到挤出机</td>
+</tr>
+<tr>
+<td>21:28:18</td>
+<td><code>stg_cur</code> 11（识别打印板）</td>
+<td></td>
+</tr>
+<tr>
+<td>21:28:25</td>
+<td><code>stg_cur</code> 4（换料）；<code>star</code> → 65280；<code>ams_status</code> 0 → 258</td>
+<td></td>
+</tr>
+<tr>
+<td>21:28:56–21:29:59</td>
+<td><code>ams_status</code> 258 ↔ 263 交替</td>
+<td></td>
+</tr>
+<tr>
+<td>21:30:03</td>
+<td><code>stg_cur</code> 8；<code>ams_status</code> → 768</td>
+<td></td>
+</tr>
+<tr>
+<td>21:30:26–21:34:30</td>
+<td><code>stg_cur</code> 14 → 3 → 54 → 1 → 51 → 0</td>
+<td></td>
+</tr>
+<tr>
+<td>21:34:30–22:17:09</td>
+<td>打印中</td>
+<td>补料约 120 次</td>
+</tr>
+<tr>
+<td>22:17:19</td>
+<td><code>gcode_state</code> RUNNING → FINISH；<code>stg_cur</code> → -1</td>
+<td></td>
+</tr>
+<tr>
+<td>22:19:25</td>
+<td><code>ams_change_filament</code>（255 / 255 / 255）——在屏幕上点了退料</td>
+<td>等打印机切断、回抽</td>
+</tr>
+<tr>
+<td>22:19:26</td>
+<td><code>ams_status</code> 0 → 258；<code>star</code> → 65535</td>
+<td></td>
+</tr>
+<tr>
+<td>22:20:11</td>
+<td><code>ams_status</code> → 259</td>
+<td></td>
+</tr>
+<tr>
+<td>22:20:15</td>
+<td><code>ams_status</code> → 260</td>
+<td></td>
+</tr>
+<tr>
+<td>22:20:17</td>
+<td>HMS <code>07FF-2000-0002-0004</code></td>
+<td></td>
+</tr>
+<tr>
+<td>22:20:18</td>
+<td><code>print_error</code> → <code>0x07FFC003</code></td>
+<td>马上退料</td>
+</tr>
+<tr>
+<td>22:20:21</td>
+<td><code>snow</code> → 65535；<code>info</code> → 1036；HMS 清空</td>
+<td></td>
+</tr>
+<tr>
+<td>22:20:22</td>
+<td><code>hw_switch_state</code> 3 → 2；<code>print_error</code> → 0；<code>tray_now</code> → 255；<code>ams_status</code> → 0</td>
+<td></td>
+</tr>
+<tr>
+<td>22:20:56</td>
+<td></td>
+<td>退到"已退料"</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="42-进料阶段外置料盘没有送到19201923">4.2 进料阶段外置料盘没有送到（19:20–19:23）</h3>
+<p>当时 SEMI-AMS 在反复重启（v1.1.1 内存不足），没有送料。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>打印机消息</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>19:20:41</td>
+<td><code>project_file</code>（外置料盘）</td>
+</tr>
+<tr>
+<td>19:22:15</td>
+<td><code>stg_cur</code> 4（换料）；<code>ams_status</code> 258；<code>star</code> → 65280</td>
+</tr>
+<tr>
+<td>19:22:33</td>
+<td><code>print_error</code> <code>0x07FFC006</code>；HMS <code>07FF-2000-0002-0002</code>；<code>ams_status</code> 261——等耗材送进来</td>
+</tr>
+<tr>
+<td>19:23:32</td>
+<td><code>ams_control</code> resume（在 App 上点继续），错误清除</td>
+</tr>
+<tr>
+<td>19:23:34</td>
+<td><code>stop</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="43-中途停止打印17401925">4.3 中途停止打印（17:40、19:25）</h3>
+<p><code>stop</code> → 1–4 秒内 <code>gcode_state</code> RUNNING → FAILED，<code>stg_cur</code> → -1 → 3–5 秒后 <code>print_error</code> <code>0x0300400C</code> → 之后被清除变回 0。停止后打印机<strong>不会</strong>自己退料，耗材还在挤出机里。</p>
+<h3 id="44-在屏幕上退外置料盘19252219">4.4 在屏幕上退外置料盘（19:25、22:19）</h3>
+<p><code>ams_change_filament</code>（<code>ams_id 255, slot_id 255, target 255</code>）→ <code>ams_status</code> 258 → 259 → 260（约 50 秒，加热、切断、回抽）→ HMS <code>07FF-2000-0002-0004</code> + <code>print_error</code> <code>0x07FFC003</code>，等人拔料 → 耗材离开挤出机后：<code>hw_switch_state</code> 3 → 2，<code>snow</code> → 65535，<code>tray_now</code> → 255，<code>ams_status</code> → 0，错误自动清除。</p>
+<p>19:26 那次没有进料器帮忙，人先在 App 上清除了错误（<code>clean_print_error</code>），过了 1 分钟才把耗材拔出来。</p>
+<hr />
+<h2 id="5-semi-ams-用到的判断">5. SEMI-AMS 用到的判断</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>打印机消息</th>
+<th>SEMI-AMS 动作（v1.1.4）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>project_file</code> 成功，<code>ams_mapping2</code> 里有外置料盘（或 <code>use_ams</code> false）</td>
+<td>开始送料</td>
+</tr>
+<tr>
+<td><code>gcode_state</code> 从非打印变成 PREPARE / RUNNING，且当前料盘是外置料盘</td>
+<td>备用的开始判断</td>
+</tr>
+<tr>
+<td><code>ams_change_filament</code> 退外置料盘（<code>target 255</code>，<code>slot_id</code> 255 或没有）</td>
+<td>等打印机切断、回抽（最长 <code>mqtt_unload_wait_s</code>）</td>
+</tr>
+<tr>
+<td><code>print_error</code> <code>0x07FFC003</code></td>
+<td>马上退料</td>
+</tr>
+<tr>
+<td>挤出机耗材传感器变成"无"（<code>extruder.info</code> bit1）</td>
+<td>正在等退料时马上退；空闲时作为备用的退料判断</td>
+</tr>
+</tbody>
+</table></div>
+<p>还没用到、以后可能有用的信号：</p>
+<ul>
+<li><code>print_error</code> <code>0x07FFC006</code>：打印机在等外置料盘的耗材，可以作为"开始送料"或"重新送料"的信号。</li>
+<li><code>mapping</code> 和 <code>gcode_state</code>：SEMI-AMS 中途重启、错过了 <code>project_file</code> 时，可以据此知道当前任务正在用外置料盘，接着补料。</li>
+<li><code>vir_slot</code>：外置料盘设成了什么耗材，多台协同时用来选择进料器。</li>
+<li><code>project_file.url</code>：打印文件的下载链接，可以读出任务需要的耗材。</li>
+<li>进度、剩余时间、任务名：可以显示在点灯 App 上。</li>
+</ul>
+<hr />
+<h2 id="6-和旧资料不一样的地方p2s">6. 和旧资料不一样的地方（P2S）</h2>
+<ul>
+<li>每秒发一条完整状态，不是只发变化的字段（固件仍然按"没出现的字段保持原值"处理，两种都兼容）。</li>
+<li>外置料盘在 <code>ams.tray_now</code> 里是 <code>"0"</code>，不是 <code>"254"</code>；要看 <code>device.extruder.info[].snow</code>。</li>
+<li>打印结束或取消后 <code>gcode_state</code> 停在 <code>FINISH</code> / <code>FAILED</code>，没有回到 <code>IDLE</code>。</li>
+<li>从 Bambu Studio 进外置料盘时 <code>ams_change_filament</code> 也是 <code>target 255</code>，但 <code>slot_id</code> 是 0；退料是 <code>slot_id 255</code>（出自 ha-bambulab 的消息样本；P2S 实测只见过退料）。</li>
+<li>用外置料盘打印时 <code>project_file.use_ams</code> 也是 <code>true</code>。</li>
+</ul>
+  </main>
+</div>
+<button class="theme-toggle" type="button" aria-label="切换深色/浅色">深色 / 浅色</button>
+<script>
+(function(){
+  var toc=document.querySelector('.toc');
+  if(window.matchMedia('(max-width: 1000px)').matches) toc.removeAttribute('open');
+
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='复制';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1200)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,function(){})}
+    });
+    pre.appendChild(b);
+  });
+
+  var root=document.documentElement, btn=document.querySelector('.theme-toggle');
+  try{var saved=localStorage.getItem('semi-doc-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('semi-doc-theme',next)}catch(e){}
+  });
+
+  var links={}; document.querySelectorAll('.toc a').forEach(function(a){links[decodeURIComponent(a.getAttribute('href').slice(1))]=a});
+  var heads=[].slice.call(document.querySelectorAll('main h2[id], main h3[id]'));
+  if('IntersectionObserver' in window){
+    var current=null;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ current=e.target.id; } });
+      Object.keys(links).forEach(function(k){links[k].classList.toggle('active',k===current)});
+    },{rootMargin:'0px 0px -70% 0px'});
+    heads.forEach(function(h){io.observe(h)});
+  }
+})();
+</script>
+</body>
+</html>
