@@ -92,7 +92,17 @@ pio device monitor       # 查看日志，115200
 - 已经配过网、只是暂时连不上时（比如停电后路由器还没启动），先不开热点，在后台重连。3 分钟后仍连不上，才打开 SEMI-AMS 热点 5 分钟，之后继续后台重连。
 - 配网期间按键和送料都照常工作。
 
-点灯 App 的设置和原厂教程一样：添加独立设备，选网络接入，把 `app控制界面配置.txt` 的内容粘贴到界面配置里。不用 App 的话，密钥可以留空。
+点灯 App 的设置和原厂教程一样：添加独立设备，选网络接入，把设备的密钥（Secret Key）填到上面配网页面的 Blinker Secret 里；然后进入设备页面的界面配置，把下面这一整段粘贴进去保存。不用 App 的话，密钥可以留空。
+
+#### 点灯 App 界面配置
+
+就是原厂资料里的 `app控制界面配置.txt`，原样照抄，是一整行，复制时不要漏掉开头的 `{` 和结尾的 `}`：
+
+```text
+{¨version¨¨2.0.0¨¨config¨{¨headerColor¨¨transparent¨¨headerStyle¨¨dark¨¨background¨{¨img¨¨assets/img/headerbg.jpg¨¨isFull¨«}}¨dashboard¨|{¨type¨¨btn¨¨ico¨¨fad fa-sync¨¨mode¨É¨t0¨¨Start-Stop¨¨t1¨¨文本2¨¨bg¨É¨cols¨Ë¨rows¨Ë¨key¨¨btn-start-stop¨´x´É´y´É¨clr¨¨#00A90C¨¨lstyle¨É}{ßCßDßE¨fad fa-siren-on¨ßGÉßH¨EMERGENCY¨ßJßKßLÉßMËßNËßO¨btn-emergency¨´x´Ï´y´ÉßQ¨#EA0909¨ßSÉ}{ßC¨deb¨ßGÉßLÉßMÑßNÍßO¨debug¨´x´É´y´ËßSÊ}{ßC¨num¨ßH¨RSSI¨ßE¨fad fa-signal¨ßQ¨#389BEE¨¨min¨É¨max¨¢1c¨uni¨¨dbm¨ßLÉßMËßNËßO¨num-rssi¨´x´Ï´y´Ï}{ßC¨tex¨ßH¨0天0时0分¨ßJ¨系统运行时长¨¨size¨¤EßLÉßE¨fad fa-heartbeat¨ßMÍßNËßO¨tex-runtime¨´x´Ë´y´ÏßQßRßSÌ}{ßCßißH¨未知¨ßJ¨工作状态¨ßl¤EßLÉßE¨fad fa-user-robot¨ßMÍßNËßO¨tex-state¨´x´Ë´y´ÉßSÌßQ¨#076EEF¨}{ßCßißHßoßJ¨电机状态¨ßl¤EßLÉßE¨fad fa-cogs¨ßMËßNËßO¨tex-motor¨´x´É´y´ÏßSËßQßs}{ßCßißH¨访问设备IP配置MQTT¨ßJßKßl¤EßLÉßE¨fad fa-comment-exclamation¨ßMÍßNÊßO¨tex-hint¨´x´Ë´y´ÑßSÊßQ¨#FBA613¨}{ßCßißH¨0.0.0.0¨ßJ´IP´ßl¤EßLÉßE¨fad fa-map-marked-alt¨ßMÍßNÊßO¨tex-ip¨´x´Ë´y´ÒßSÊßQßs}{ßCßDßE¨fad fa-redo-alt¨ßGÉßH´重启´ßJßKßLÉßMËßNËßO¨btn-restart¨´x´Ï´y´ÑßSÉßQßW}{ßCßDßE¨fad fa-link¨ßGÉßH¨MQTT未启用¨ßJßKßLÉßMËßNËßO¨btn-mqtt¨´x´É´y´ÑßSÉßQ¨#595959¨}÷¨actions¨|÷¨triggers¨|÷´rt´|÷}
+```
+
+里面的控件和固件里的名字一一对应：按钮 `btn-start-stop`（开始/结束）、`btn-emergency`（紧急停止/解除）、`btn-restart`（重启）、`btn-mqtt`（开关拓竹打印机 MQTT），文本 `tex-state`（工作状态）、`tex-motor`（电机状态）、`tex-runtime`（运行时长）、`tex-ip`（设备 IP）、`tex-hint`（提示），数值 `num-rssi`（WiFi 信号），以及调试框。各控件的含义见文档 8.3 节。
 
 ### 4. 调试电机（建议按顺序做）
 

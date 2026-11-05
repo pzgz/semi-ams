@@ -9,6 +9,8 @@
 #include <LittleFS.h>
 #include <Ticker.h>
 #include <Updater.h>
+#include <coredecls.h>      // can_yield
+#include <eboot_command.h>  // 升级后待执行的固件复制命令
 #include <stdarg.h>
 
 #include "app.h"
@@ -461,6 +463,28 @@ void flushLogs() {
 }
 
 }  // namespace
+
+// ================= 重启前写完日志 =================
+// 经过 ESP.restart() 的重启（网页或 OTA 升级完成、WiFiManager、点灯库、本固件自己）都会调用 SDK 的
+// system_restart()。链接时用 -Wl,--wrap=system_restart（见 platformio.ini 的 build_flags）把它换成下面的
+// 函数：先把内存里还没写进文件的日志写进去，否则升级完成、库自己重启时最后几条日志会丢。
+// 崩溃重启走 system_restart_local，不经过这里，崩溃时不会写 Flash。
+extern "C" void __real_system_restart(void);
+extern "C" void __wrap_system_restart(void) {
+  static bool done = false;
+  // 只在 loop() 的上下文里写文件；定时任务（系统任务）里不写，免得和 loop() 里进行到一半的文件操作冲突
+  if (!done && can_yield()) {
+    done = true;
+    if (!gRestartReason) {  // 本固件自己发起的重启已经写过"系统重启中…（原因）"
+      eboot_command cmd;
+      if (eboot_command_read(&cmd) == 0 && cmd.action == ACTION_COPY_RAW) LOG("固件升级完成，重启后生效");
+      else LOG("系统重启（由库发起）");
+    }
+    flushLogs();
+    fileLogs(true);
+  }
+  __real_system_restart();
+}
 
 // ================= app:: 实现 =================
 namespace app {
