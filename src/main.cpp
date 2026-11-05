@@ -287,6 +287,8 @@ void printHelp() {
       "  mqtt on|off            开启/关闭拓竹打印机 MQTT\n"
       "  mqtt ip|sn|code <值>   设置打印机 IP / 序列号 / 访问码\n"
       "  mqtt wait <秒>         打印机退料后最多等多久再退料（0–600）\n"
+      "  mqtt load on|off       响应进料：打印机用外置料盘开始打印时自动送料\n"
+      "  mqtt unload on|off     响应退料：在打印机上退料时自动退料\n"
       "  restart                重启\n"
       "  wifireset              清除 WiFi 和点灯密钥并重启"));
 }
@@ -296,6 +298,8 @@ void printMqtt() {
                 printer::statusText().c_str(), gSettings.mqttEnable ? PSTR("是") : PSTR("否"),
                 gSettings.mqttIp[0] ? gSettings.mqttIp : "-", gSettings.mqttSn[0] ? gSettings.mqttSn : "-",
                 gSettings.mqttCode[0] ? PSTR("已设置") : "-", (unsigned)gSettings.mqttUnloadWaitS);
+  Serial.printf_P(PSTR("  响应进料:" SEMI_PS "  响应退料:" SEMI_PS "\n"), gSettings.mqttAutoLoad ? PSTR("是") : PSTR("否"),
+                gSettings.mqttAutoUnload ? PSTR("是") : PSTR("否"));
   Serial.printf_P(PSTR("  打印机：%s  最近事件：%s\n"), printer::printerText().c_str(), printer::lastEvent());
 }
 
@@ -319,8 +323,10 @@ void handleMqttCmd(String rest) {
     ok = settingsSetMqttCode(val.c_str());
   } else if (sub == "wait") {
     ok = settingsSetMqttUnloadWait(val.toInt());
+  } else if ((sub == "load" || sub == "unload") && (val == "on" || val == "off")) {
+    (sub == "load" ? gSettings.mqttAutoLoad : gSettings.mqttAutoUnload) = val == "on";
   } else {
-    Serial.println(F("用法：mqtt [on|off|ip <IP>|sn <序列号>|code <访问码>|wait <秒>]"));
+    Serial.println(F("用法：mqtt [on|off|ip <IP>|sn <序列号>|code <访问码>|wait <秒>|load on|off|unload on|off]"));
     return;
   }
   if (!ok) {

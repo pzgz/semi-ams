@@ -96,7 +96,8 @@ const char MQTT_HEAD[] PROGMEM = R"HTML(<div class="card"><h2>拓竹打印机（
 )HTML";
 
 const char MQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form>
-<p style="font-size:13px;color:#888;margin:8px 0 0">打印机用外置料盘开始打印时自动送料；在打印机上退料时自动退料。
+<p style="font-size:13px;color:#888;margin:8px 0 0">打印机用外置料盘开始打印时自动送料（响应进料）；在打印机上退料时自动退料（响应退料）。
+几台 SEMI-AMS 接同一台打印机时，这次不用的那几台取消"响应进料"，否则会一起送料；退料只有正在打印中的那台会执行。
 打印机和本设备要在同一个局域网，打印机可以保持连接拓竹云。IP、序列号、访问码在打印机屏幕的设置里能看到（局域网 / 设备信息）。</p></div>
 )HTML";
 
@@ -168,6 +169,11 @@ void handleRoot() {
   mq += F("<label>启用<input type=\"checkbox\" name=\"enable\" value=\"1\" style=\"width:auto\"");
   if (gSettings.mqttEnable) mq += F(" checked");
   mq += F("></label><input type=\"hidden\" name=\"has_enable\" value=\"1\">\n");
+  mq += F("<label>响应进料<input type=\"checkbox\" name=\"load\" value=\"1\" style=\"width:auto\"");
+  if (gSettings.mqttAutoLoad) mq += F(" checked");
+  mq += F("></label>\n<label>响应退料<input type=\"checkbox\" name=\"unload\" value=\"1\" style=\"width:auto\"");
+  if (gSettings.mqttAutoUnload) mq += F(" checked");
+  mq += F("></label><input type=\"hidden\" name=\"has_auto\" value=\"1\">\n");
   mq += F("<label>打印机 IP<input class=\"wide\" name=\"ip\" placeholder=\"192.168.1.50\" value=\"");
   mq += gSettings.mqttIp;
   mq += F("\"></label>\n<label>序列号<input class=\"wide\" name=\"sn\" pattern=\"[A-Za-z0-9]{8,20}\" value=\"");
@@ -325,10 +331,15 @@ void handleMqtt() {
   if (code.length() && !settingsSetMqttCode(code.c_str())) bad = true;  // 留空不修改
   if (wait.length() && !settingsSetMqttUnloadWait(wait.toInt())) bad = true;
   if (server.hasArg("has_enable")) gSettings.mqttEnable = server.arg("enable") == "1";
+  if (server.hasArg("has_auto")) {  // 复选框不勾选时不会提交，所以用 has_auto 判断表单里有这两项
+    gSettings.mqttAutoLoad = server.arg("load") == "1";
+    gSettings.mqttAutoUnload = server.arg("unload") == "1";
+  }
   settingsSave();
   printer::applySettings();
-  LOG("网页：拓竹打印机设置已保存（" SEMI_PS "）" SEMI_PS, gSettings.mqttEnable ? PSTR("已启用") : PSTR("未启用"),
-      bad ? PSTR("，有格式不对的项未修改") : "");
+  LOG("网页：拓竹打印机设置已保存（" SEMI_PS "，进料" SEMI_PS "，退料" SEMI_PS "）" SEMI_PS,
+      gSettings.mqttEnable ? PSTR("已启用") : PSTR("未启用"), gSettings.mqttAutoLoad ? PSTR("响应") : PSTR("不响应"),
+      gSettings.mqttAutoUnload ? PSTR("响应") : PSTR("不响应"), bad ? PSTR("，有格式不对的项未修改") : "");
   server.sendHeader("Location", "/");
   server.send(303);
 }

@@ -198,6 +198,8 @@ bool settingsBegin() {
     else if (k == "mqtt_sn") settingsSetMqttSn(v.c_str());
     else if (k == "mqtt_code") settingsSetMqttCode(v.c_str());
     else if (k == "mqtt_unload_wait_s") settingsSetMqttUnloadWait(v.toInt());
+    else if (k == "mqtt_auto_load") gSettings.mqttAutoLoad = v.toInt() != 0;
+    else if (k == "mqtt_auto_unload") gSettings.mqttAutoUnload = v.toInt() != 0;
     else settingsSet(k.c_str(), v.toInt());
   }
   f.close();
@@ -217,6 +219,7 @@ bool settingsSave() {
   f.printf("mqtt_enable=%d\nmqtt_ip=%s\nmqtt_sn=%s\nmqtt_code=%s\nmqtt_unload_wait_s=%u\n",
            gSettings.mqttEnable ? 1 : 0, gSettings.mqttIp, gSettings.mqttSn, gSettings.mqttCode,
            (unsigned)gSettings.mqttUnloadWaitS);
+  f.printf("mqtt_auto_load=%d\nmqtt_auto_unload=%d\n", gSettings.mqttAutoLoad ? 1 : 0, gSettings.mqttAutoUnload ? 1 : 0);
   f.close();
   return true;
 }

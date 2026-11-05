@@ -14,6 +14,10 @@ struct Settings {
   char mqttSn[24] = "";     // 打印机序列号
   char mqttCode[17] = "";   // 打印机访问码（配对码）
   uint16_t mqttUnloadWaitS = 120;  // 打印机退料后，最多等多久再开始退料（等它把耗材退出自己的传感器）
+  // 多台 SEMI-AMS 接同一台打印机时用：不在这次打印里用的那几台关掉"响应进料"，否则开始打印时会一起送料。
+  // 退料只有正在"打印中"的那台会执行，一般都开着
+  bool mqttAutoLoad = true;    // 响应进料：打印机用外置料盘开始打印时自动送料
+  bool mqttAutoUnload = true;  // 响应退料：在打印机上退料时自动退料
 };
 
 struct SettingDef {

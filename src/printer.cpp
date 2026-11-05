@@ -220,14 +220,26 @@ void connectNow() {
 
 void takeActions() {
   const char* why = nullptr;
+  const unsigned long sec = (unsigned long)(app::uptimeMs() / 1000);
   if (gMon.takeStart(&why)) {
-    snprintf_P(gEvent, sizeof(gEvent), PSTR("[%lu] 开始打印 → 送料"), (unsigned long)(app::uptimeMs() / 1000));
-    app::requestPrinterStart(why);
+    // 关掉"响应进料"的进料器只记录，不送料（多台接同一台打印机时，不用的那几台关掉）
+    if (gSettings.mqttAutoLoad) {
+      snprintf_P(gEvent, sizeof(gEvent), PSTR("[%lu] 开始打印 → 送料"), sec);
+      app::requestPrinterStart(why);
+    } else {
+      snprintf_P(gEvent, sizeof(gEvent), PSTR("[%lu] 开始打印（未开启响应进料）"), sec);
+      LOG(SEMI_PS "（未开启响应进料，不送料）", why);
+    }
     bump();
   }
   if (gMon.takeUnload(&why)) {
-    snprintf_P(gEvent, sizeof(gEvent), PSTR("[%lu] 打印机退料 → 退料"), (unsigned long)(app::uptimeMs() / 1000));
-    app::requestPrinterUnload(why);
+    if (gSettings.mqttAutoUnload) {
+      snprintf_P(gEvent, sizeof(gEvent), PSTR("[%lu] 打印机退料 → 退料"), sec);
+      app::requestPrinterUnload(why);
+    } else {
+      snprintf_P(gEvent, sizeof(gEvent), PSTR("[%lu] 打印机退料（未开启响应退料）"), sec);
+      LOG(SEMI_PS "（未开启响应退料，不退料）", why);
+    }
     bump();
   }
 }
@@ -236,7 +248,21 @@ void takeActions() {
 
 namespace printer {
 
+// 记下连接用的设置；和上次记下的不一样时返回 true（需要重新连接）
+static bool rememberConnSettings() {
+  static bool lastEnable = false;
+  static char lastIp[sizeof(gSettings.mqttIp)], lastSn[sizeof(gSettings.mqttSn)], lastCode[sizeof(gSettings.mqttCode)];
+  const bool changed = lastEnable != gSettings.mqttEnable || strcmp(lastIp, gSettings.mqttIp) ||
+                       strcmp(lastSn, gSettings.mqttSn) || strcmp(lastCode, gSettings.mqttCode);
+  lastEnable = gSettings.mqttEnable;
+  strlcpy(lastIp, gSettings.mqttIp, sizeof(lastIp));
+  strlcpy(lastSn, gSettings.mqttSn, sizeof(lastSn));
+  strlcpy(lastCode, gSettings.mqttCode, sizeof(lastCode));
+  return changed;
+}
+
 void begin() {
+  rememberConnSettings();
   gMon.setLogger(monLog);
   gMon.setUnloadWaitMs(gSettings.mqttUnloadWaitS * 1000UL);
   gReader.setListener(&gListener);
@@ -245,6 +271,11 @@ void begin() {
 
 void applySettings() {
   gMon.setUnloadWaitMs(gSettings.mqttUnloadWaitS * 1000UL);
+  // 只改了退料等待、响应进料/退料时不用重新连接（打印中改也不会打断正在等的退料）
+  if (!rememberConnSettings()) {
+    bump();
+    return;
+  }
   gMon.cancelPending();
   gNoPushall = false;
   gMfln = -1;
