@@ -1,5 +1,7 @@
 #include "fsm.h"
 
+#include "pgm.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -7,15 +9,15 @@ namespace semi {
 
 const char* Fsm::stateName(State s) {
   switch (s) {
-    case State::NoMaterial: return "无耗材";
-    case State::Loading:    return "耗材吸入中";
-    case State::Ready:      return "耗材就绪";
-    case State::Printing:   return "打印中";
-    case State::Unloading:  return "退料中";
-    case State::Retracted:  return "已退料";
-    case State::Emergency:  return "紧急停止";
+    case State::NoMaterial: return SEMI_P("无耗材");
+    case State::Loading:    return SEMI_P("耗材吸入中");
+    case State::Ready:      return SEMI_P("耗材就绪");
+    case State::Printing:   return SEMI_P("打印中");
+    case State::Unloading:  return SEMI_P("退料中");
+    case State::Retracted:  return SEMI_P("已退料");
+    case State::Emergency:  return SEMI_P("紧急停止");
   }
-  return "未知状态";
+  return SEMI_P("未知状态");
 }
 
 const char* Fsm::stateKey(State s) {
@@ -33,9 +35,9 @@ const char* Fsm::stateKey(State s) {
 
 const char* Fsm::motorName(MotorDir d) {
   switch (d) {
-    case MotorDir::Forward: return "正转";
-    case MotorDir::Reverse: return "反转";
-    default:                return "停止";
+    case MotorDir::Forward: return SEMI_P("正转");
+    case MotorDir::Reverse: return SEMI_P("反转");
+    default:                return SEMI_P("停止");
   }
 }
 
@@ -44,7 +46,7 @@ void Fsm::logf(const char* fmt, ...) {
   char buf[112];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, ap);
+  SEMI_VSNPRINTF(buf, sizeof(buf), fmt, ap);  // fmt 在 Flash 里（SEMI_P）
   va_end(ap);
   log_(buf);
 }
@@ -70,11 +72,11 @@ void Fsm::begin(const Inputs& in, uint32_t now) {
   // 上电不会自动转电机：进料口有耗材但没到就绪位置，按"已退料"处理，等按黑色按钮再吸料
   last_ = in;
   prevNow_ = now;
-  enter(in.ready ? State::Ready : (in.in ? State::Retracted : State::NoMaterial), now, "上电");
+  enter(in.ready ? State::Ready : (in.in ? State::Retracted : State::NoMaterial), now, SEMI_P("上电"));
 }
 
 void Fsm::enter(State s, uint32_t now, const char* why) {
-  logf("状态: %s -> %s（%s）", stateName(state_), stateName(s), why);
+  logf(SEMI_P("状态: " SEMI_PS " -> " SEMI_PS "（" SEMI_PS "）"), stateName(state_), stateName(s), why);
   state_ = s;
   enteredAt_ = now;
   rev_++;
@@ -108,7 +110,7 @@ void Fsm::enter(State s, uint32_t now, const char* why) {
     case State::Unloading:
       clearing_ = false;
       readySeen_ = last_.ready;
-      if (!readySeen_) logf("就绪开关没有耗材，将一直退到耗材离开进料口");
+      if (!readySeen_) logf(SEMI_P("就绪开关没有耗材，将一直退到耗材离开进料口"));
       setMotor(MotorDir::Reverse, params_.unloadSpeed);
       break;
     case State::Emergency:
@@ -121,7 +123,7 @@ void Fsm::enter(State s, uint32_t now, const char* why) {
 void Fsm::emergency(const char* reason, uint32_t now) {
   if (state_ != State::Emergency) resume_ = state_;
   setNote(reason);
-  logf("紧急停止：%s", reason);
+  logf(SEMI_P("紧急停止：" SEMI_PS), reason);
   enter(State::Emergency, now, reason);
 }
 
@@ -142,10 +144,10 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
   // ---- 红色按钮：任何状态下都优先处理 ----
   if (cmd.emergency) {
     if (state_ == State::Emergency) {
-      logf("解除紧急停止，恢复到：%s", stateName(resume_));
-      enter(resume_, now, "解除紧急停止");
+      logf(SEMI_P("解除紧急停止，恢复到：" SEMI_PS), stateName(resume_));
+      enter(resume_, now, SEMI_P("解除紧急停止"));
     } else {
-      emergency("手动紧急停止", now);
+      emergency(SEMI_P("手动紧急停止"), now);
     }
     return;
   }
@@ -160,11 +162,11 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
         inTiming_ = false;
       }
       if (in.ready) {
-        enter(State::Ready, now, "检测到耗材已就绪");
+        enter(State::Ready, now, SEMI_P("检测到耗材已就绪"));
         break;
       }
       if (in.in && !armed_) {  // 例如紧急停止期间插入了耗材：当作已退料，按黑色按钮吸料
-        enter(State::Retracted, now, "进料口有耗材");
+        enter(State::Retracted, now, SEMI_P("进料口有耗材"));
         break;
       }
       if (armed_ && in.in) {
@@ -173,17 +175,17 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
           inSince_ = now;
         } else if (now - inSince_ >= params_.insertDelayMs) {
           startAfterLoad_ = false;
-          enter(State::Loading, now, "耗材插入");
+          enter(State::Loading, now, SEMI_P("耗材插入"));
           break;
         }
       }
       if (cmd.startStop) {
-        setNote("无耗材，无法开始");
-        logf("无耗材，忽略开始命令");
+        setNote(SEMI_P("无耗材，无法开始"));
+        logf(SEMI_P("无耗材，忽略开始命令"));
       }
       if (cmd.printerStart) {
-        setNote("打印机已开始打印，但没有耗材");
-        logf("打印机开始打印，但进料器没有耗材");
+        setNote(SEMI_P("打印机已开始打印，但没有耗材"));
+        logf(SEMI_P("打印机开始打印，但进料器没有耗材"));
       }
       break;
     }
@@ -193,16 +195,16 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
       if (!in.full) fullArmed_ = true;
       if ((cmd.startStop || cmd.printerStart) && !startAfterLoad_) {
         startAfterLoad_ = true;
-        logf("吸料完成后直接开始打印");
+        logf(SEMI_P("吸料完成后直接开始打印"));
       }
       if (in.ready || (fullArmed_ && in.full)) {
-        if (!in.ready) logf("就绪开关未触发，改用满料霍尔判断就绪");
-        if (startAfterLoad_) enter(State::Printing, now, "吸料完成，开始打印");
-        else enter(State::Ready, now, in.ready ? "耗材就绪" : "缓冲器已满");
+        if (!in.ready) logf(SEMI_P("就绪开关未触发，改用满料霍尔判断就绪"));
+        if (startAfterLoad_) enter(State::Printing, now, SEMI_P("吸料完成，开始打印"));
+        else enter(State::Ready, now, in.ready ? SEMI_P("耗材就绪") : SEMI_P("缓冲器已满"));
       } else if (!in.in) {
-        enter(State::NoMaterial, now, "耗材抽出");
+        enter(State::NoMaterial, now, SEMI_P("耗材抽出"));
       } else if (now - enteredAt_ > params_.loadTimeoutMs) {
-        emergency("吸入超时", now);
+        emergency(SEMI_P("吸入超时"), now);
       }
       break;
     }
@@ -210,15 +212,15 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
     case State::Ready: {
       setMotor(MotorDir::Stop, 0);
       if (cmd.startStop) {
-        enter(State::Printing, now, "开始打印");
+        enter(State::Printing, now, SEMI_P("开始打印"));
       } else if (cmd.printerStart) {
-        enter(State::Printing, now, "打印机开始打印");
+        enter(State::Printing, now, SEMI_P("打印机开始打印"));
       } else if (!hasMaterial) {
-        enter(State::NoMaterial, now, "耗材抽出");
+        enter(State::NoMaterial, now, SEMI_P("耗材抽出"));
       } else if (in.ready) {
         readyBySwitch_ = true;
       } else if (readyBySwitch_) {
-        enter(State::Retracted, now, "耗材离开就绪开关");
+        enter(State::Retracted, now, SEMI_P("耗材离开就绪开关"));
       }
       break;
     }
@@ -226,21 +228,21 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
     case State::Retracted: {
       setMotor(MotorDir::Stop, 0);
       if (in.ready) {
-        enter(State::Ready, now, "检测到耗材已就绪");
+        enter(State::Ready, now, SEMI_P("检测到耗材已就绪"));
       } else if (!in.in) {
-        enter(State::NoMaterial, now, "耗材抽出");
+        enter(State::NoMaterial, now, SEMI_P("耗材抽出"));
       } else if (cmd.startStop || cmd.printerStart) {
         startAfterLoad_ = true;
-        enter(State::Loading, now, cmd.startStop ? "重新吸料，完成后开始打印" : "打印机开始打印，先重新吸料");
+        enter(State::Loading, now, cmd.startStop ? SEMI_P("重新吸料，完成后开始打印") : SEMI_P("打印机开始打印，先重新吸料"));
       }
       break;
     }
 
     case State::Printing: {
       if (cmd.startStop || cmd.printerUnload) {
-        const char* why = cmd.startStop ? "结束打印" : "打印机已退料";
+        const char* why = cmd.startStop ? SEMI_P("结束打印") : SEMI_P("打印机已退料");
         if (hasMaterial) enter(State::Unloading, now, why);
-        else enter(State::NoMaterial, now, cmd.startStop ? "结束打印（无耗材）" : "打印机已退料（无耗材）");
+        else enter(State::NoMaterial, now, cmd.startStop ? SEMI_P("结束打印（无耗材）") : SEMI_P("打印机已退料（无耗材）"));
         break;
       }
 
@@ -252,9 +254,9 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
           tailDone_ = params_.tailFeedMs == 0;
           tailReadySeen_ = in.ready;
           tailUsedMs_ = 0;
-          setNote("耗材已用尽");
-          if (tailDone_) logf("进料口没有耗材，停止补料");
-          else logf("进料口没有耗材，继续送料直到料尾离开齿轮");
+          setNote(SEMI_P("耗材已用尽"));
+          if (tailDone_) logf(SEMI_P("进料口没有耗材，停止补料"));
+          else logf(SEMI_P("进料口没有耗材，继续送料直到料尾离开齿轮"));
         }
         refillTiming_ = false;
       } else if (outOfMaterial_) {
@@ -269,7 +271,7 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
           feeding_ = !in.full;
           feedStart_ = now;
           feedLimit_ = params_.firstFeedTimeoutMs;
-          logf("检测到新耗材，重新送料到满");
+          logf(SEMI_P("检测到新耗材，重新送料到满"));
         }
       }
       if (outOfMaterial_) {
@@ -278,10 +280,10 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
           if (in.ready) tailReadySeen_ = true;
           if (tailReadySeen_ && !in.ready) {
             tailDone_ = true;
-            logf("料尾已过就绪开关，停止送料");
+            logf(SEMI_P("料尾已过就绪开关，停止送料"));
           } else if (tailUsedMs_ >= params_.tailFeedMs) {
             tailDone_ = true;
-            logf("料尾送料已达 %lums，停止送料", (unsigned long)params_.tailFeedMs);
+            logf(SEMI_P("料尾送料已达 %lums，停止送料"), (unsigned long)params_.tailFeedMs);
           }
         }
         if (tailDone_) {
@@ -292,19 +294,31 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
         // 料尾还没送出：照常按缓冲器送料（到 FULL 暂停，EMPTY 再送），下面的逻辑不变
       }
 
+      // 两颗霍尔同时有效：按"满"处理不送料（避免送过头），但打印机会拉不动耗材，所以明确提示
+      if (in.lack && in.full) {
+        if (!bothHalls_) {
+          bothHalls_ = true;
+          setNote(SEMI_P("EMPTY和FULL同时有效，不送料"));
+          logf(SEMI_P("EMPTY 和 FULL 霍尔同时有效：按缓冲器满处理，不送料（磁铁太大或滑块卡住？）"));
+        }
+      } else if (bothHalls_) {
+        bothHalls_ = false;
+        setNote("");
+      }
+
       if (feeding_) {
         if (in.full) {
           feeding_ = false;
-          logf("缓冲器已满，停止补料");
+          logf(SEMI_P("缓冲器已满，停止补料"));
         } else if (now - feedStart_ > feedLimit_) {
-          emergency("送料超时", now);
+          emergency(SEMI_P("送料超时"), now);
           break;
         }
       } else if (in.lack && !in.full) {
         feeding_ = true;
         feedStart_ = now;
         feedLimit_ = params_.feedTimeoutMs;
-        logf("缓冲器已空，开始补料");
+        logf(SEMI_P("缓冲器已空，开始补料"));
       }
       setMotor(feeding_ ? MotorDir::Forward : MotorDir::Stop, params_.feedSpeed);
       break;
@@ -315,9 +329,9 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
       if (in.ready) readySeen_ = true;
       // 再按一次黑键：取消退料，回到打印中重新送料（要停止电机用红色按钮）
       if (cmd.startStop || cmd.printerStart) {
-        const char* why = cmd.startStop ? "取消退料，继续打印" : "打印机开始打印，取消退料";
+        const char* why = cmd.startStop ? SEMI_P("取消退料，继续打印") : SEMI_P("打印机开始打印，取消退料");
         if (hasMaterial) enter(State::Printing, now, why);
-        else enter(State::NoMaterial, now, "取消退料（无耗材）");
+        else enter(State::NoMaterial, now, SEMI_P("取消退料（无耗材）"));
         break;
       }
       // 正常：耗材退过就绪开关后再多退一点，停在进料口里（已退料）
@@ -328,20 +342,20 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
           clearing_ = true;
           clearSince_ = now;
         } else if (now - clearSince_ >= params_.unloadExtraMs) {
-          enter(in.in ? State::Retracted : State::NoMaterial, now, "退料完成");
+          enter(in.in ? State::Retracted : State::NoMaterial, now, SEMI_P("退料完成"));
           break;
         }
       } else {
         clearing_ = false;
       }
-      if (now - enteredAt_ > params_.unloadTimeoutMs) emergency("退料超时", now);
+      if (now - enteredAt_ > params_.unloadTimeoutMs) emergency(SEMI_P("退料超时"), now);
       break;
     }
 
     case State::Emergency: {
       setMotor(MotorDir::Stop, 0);
-      if (cmd.startStop) logf("紧急停止中，请先按红色按钮解除");
-      if (cmd.printerStart || cmd.printerUnload) logf("紧急停止中，忽略打印机的%s", cmd.printerStart ? "开始打印" : "退料");
+      if (cmd.startStop) logf(SEMI_P("紧急停止中，请先按红色按钮解除"));
+      if (cmd.printerStart || cmd.printerUnload) logf(SEMI_P("紧急停止中，忽略打印机的" SEMI_PS), cmd.printerStart ? SEMI_P("开始打印") : SEMI_P("退料"));
       break;
     }
   }

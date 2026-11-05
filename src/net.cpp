@@ -5,9 +5,12 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
+#include <LittleFS.h>
+#include <Updater.h>
 #include <WiFiManager.h>
 
 #include "app.h"
+#include "crash.h"
 #include "cloud.h"
 #include "config.h"
 #include "printer.h"
@@ -36,7 +39,7 @@ void goOffline(const char* why) {
   gLastRetry = millis();
   WiFi.mode(WIFI_STA);
   WiFi.begin();  // 用已保存的 WiFi 后台重连
-  app::log("%s", why);
+  LOG(SEMI_PS, why);  // why 在 Flash 里
 }
 
 // ---------------- 网页 ----------------
@@ -69,6 +72,7 @@ pre{font-size:12px;background:#111;color:#ddd;padding:10px;border-radius:8px;whi
 <span>红色按钮</span><span id="be"></span>
 <span>定时任务</span><span id="tk"></span>
 <span>运行时长</span><span id="up">-</span>
+<span>空闲内存</span><span id="hp">-</span>
 <span>WiFi</span><span id="wifi">-</span>
 <span>点灯</span><span id="cloud">-</span>
 </div></div>
@@ -98,7 +102,10 @@ const char MQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px
 
 const char PAGE_TAIL[] PROGMEM = R"HTML(
 <div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form></div>
-<div class="card"><h2>日志</h2><pre id="log"></pre></div>
+<div class="card"><h2>日志</h2><pre id="log"></pre><div class="btns">
+<a href="/api/log" target="_blank"><button class="gray">查看完整日志（重启后也保留）</button></a>
+<button class="gray" onclick="if(confirm('清空保存的日志文件？'))fetch('/api/log/clear',{method:'POST'})">清空日志文件</button>
+</div></div>
 <div class="card"><h2>维护</h2><div class="btns">
 <a href="/update"><button class="gray">固件升级</button></a>
 <button class="red" onclick="if(confirm('清除 WiFi 和点灯密钥并重启？重启后连接 SEMI-AMS 热点重新配网'))fetch('/api/reset',{method:'POST'})">重置配网</button>
@@ -112,6 +119,7 @@ for(const k of ['in','ready','lack','full'])document.getElementById(k).innerHTML
 document.getElementById('bs').innerHTML=btn(s.bs,'GPIO0',s.g0);
 document.getElementById('be').innerHTML=btn(s.be,'GPIO15',s.g15);
 document.getElementById('tk').textContent='最大间隔 '+s.tg+'ms，被推迟 '+s.tl+' 次';
+if(s.hp){var h=s.hp.split('/');document.getElementById('hp').textContent=h[0]+'（开机后最低 '+h[1]+'，最大连续 '+h[2]+'）';}
 const l=document.getElementById('log');l.textContent=s.log.join('\n');l.scrollTop=l.scrollHeight;}).catch(()=>{})}
 upd();setInterval(upd,1500);
 </script></body></html>)HTML";
@@ -139,7 +147,7 @@ void handleRoot() {
   const SettingDef* defs = settingDefs(n);
   for (size_t i = 0; i < n; i++) {
     form += F("<label>");
-    form += defs[i].label;
+    form += FPSTR(defs[i].label);  // 中文名在 Flash 里
     form += F("（");
     form += defs[i].unit;
     form += F("）<input type=\"number\" name=\"");
@@ -189,7 +197,7 @@ void handleStatus() {
   j += F("{\"ver\":\"v" FW_VERSION "\",\"state\":\"");
   j += jsonEscape(app::stateText());
   j += F("\",\"motor\":\"");
-  j += semi::Fsm::motorName(s.motor);
+  j += FPSTR(semi::Fsm::motorName(s.motor));
   if (s.motor != semi::MotorDir::Stop) {
     j += ' ';
     j += s.duty;
@@ -215,6 +223,13 @@ void handleStatus() {
   j += s.tickGapMs;
   j += F(",\"tl\":");
   j += s.tickLate;
+  j += F(",\"hp\":\"");  // 空闲内存/开机后最低/最大连续
+  j += ESP.getFreeHeap();
+  j += '/';
+  j += crash::heapMin();
+  j += '/';
+  j += ESP.getMaxFreeBlockSize();
+  j += '"';
   j += F(",\"up\":\"");
   j += app::uptimeText();
   j += F("\",\"wifi\":\"");
@@ -224,7 +239,7 @@ void handleStatus() {
   j += F("dBm ");
   j += WiFi.localIP().toString();
   j += F("\",\"cloud\":\"");
-  j += cloud::statusText();
+  j += FPSTR(cloud::statusText());
   j += F("\",\"mq\":\"");
   j += jsonEscape(printer::statusText());
   j += F("\",\"mp\":\"");
@@ -236,7 +251,7 @@ void handleStatus() {
   server.chunkedResponseModeStart(200, "application/json; charset=utf-8");
   server.sendContent(j);
   const size_t n = app::logCount();
-  const size_t first = n > 15 ? n - 15 : 0;
+  const size_t first = 0;  // 内存里的日志全部显示（最多 16 条），更早的看完整日志
   for (size_t i = first; i < n; i++) {
     j = i == first ? "\"" : ",\"";
     j += jsonEscape(app::logLine(i));
@@ -259,20 +274,20 @@ void sendMsg(bool ok, const String& msg) {
 void handleCmd() {
   String c = server.arg("c");
   if (c == "start") {
-    app::requestStartStop("网页");
-    sendMsg(true, "已发送：开始/结束");
+    app::requestStartStop(PSTR("网页"));
+    sendMsg(true, F("已发送：开始/结束"));
   } else if (c == "emg") {
-    app::requestEmergency("网页");
-    sendMsg(true, "已发送：紧急停止/解除");
+    app::requestEmergency(PSTR("网页"));
+    sendMsg(true, F("已发送：紧急停止/解除"));
   } else if (c == "jogf" || c == "jogr") {
     bool ok = app::requestJog(c == "jogf" ? semi::MotorDir::Forward : semi::MotorDir::Reverse,
                               gSettings.p.feedSpeed, 2000);
-    sendMsg(ok, ok ? "点动 2 秒（补料速度）" : "只有在 无耗材/耗材就绪/已退料 状态下才能点动");
+    sendMsg(ok, ok ? F("点动 2 秒（补料速度）") : F("只有在 无耗材/耗材就绪/已退料 状态下才能点动"));
   } else if (c == "restart") {
-    sendMsg(true, "正在重启...");
-    app::requestRestart("网页");
+    sendMsg(true, F("正在重启..."));
+    app::requestRestart(PSTR("网页"));
   } else {
-    sendMsg(false, "未知命令");
+    sendMsg(false, F("未知命令"));
   }
 }
 
@@ -292,8 +307,8 @@ void handleSettings() {
   if (keyChanged) settingsSetBlinkerKey(key.c_str());
   settingsSave();
   app::applySettings();
-  app::log("网页：参数已保存%s%s", bad ? "（部分超出范围未修改）" : "",
-           keyChanged ? "，点灯密钥重启后生效" : "");
+  LOG("网页：参数已保存" SEMI_PS SEMI_PS, bad ? PSTR("（部分超出范围未修改）") : "",
+      keyChanged ? PSTR("，点灯密钥重启后生效") : "");
   server.sendHeader("Location", "/");
   server.send(303);
 }
@@ -312,14 +327,38 @@ void handleMqtt() {
   if (server.hasArg("has_enable")) gSettings.mqttEnable = server.arg("enable") == "1";
   settingsSave();
   printer::applySettings();
-  app::log("网页：拓竹打印机设置已保存（%s）%s", gSettings.mqttEnable ? "已启用" : "未启用",
-           bad ? "，有格式不对的项未修改" : "");
+  LOG("网页：拓竹打印机设置已保存（" SEMI_PS "）" SEMI_PS, gSettings.mqttEnable ? PSTR("已启用") : PSTR("未启用"),
+      bad ? PSTR("，有格式不对的项未修改") : "");
   server.sendHeader("Location", "/");
   server.send(303);
 }
 
+void handleLog() {
+  server.chunkedResponseModeStart(200, "text/plain; charset=utf-8");
+  static const char* const kFiles[] = {app::kLogFileOld, app::kLogFile};
+  char buf[512];
+  for (const char* path : kFiles) {
+    File f = LittleFS.open(path, "r");
+    if (!f) continue;
+    while (f.available()) {
+      const size_t n = f.read((uint8_t*)buf, sizeof(buf));
+      if (!n) break;
+      server.sendContent(buf, n);
+    }
+    f.close();
+  }
+  server.chunkedResponseFinalize();
+}
+
+void handleLogClear() {
+  LittleFS.remove(app::kLogFileOld);
+  LittleFS.remove(app::kLogFile);
+  LOG("日志文件已清空");
+  sendMsg(true, F("已清空"));
+}
+
 void handleReset() {
-  server.send(200, "text/plain; charset=utf-8", "已清除，正在重启");
+  server.send_P(200, PSTR("text/plain; charset=utf-8"), PSTR("已清除，正在重启"));
   net::resetAll();
 }
 
@@ -329,7 +368,7 @@ void onSaveParams() {
   k.trim();
   settingsSetBlinkerKey(k.c_str());
   settingsSave();
-  app::log("配网页面：点灯密钥已%s", k.length() ? "保存" : "清空");
+  LOG("配网页面：点灯密钥已" SEMI_PS, k.length() ? PSTR("保存") : PSTR("清空"));
 }
 
 void startServices() {
@@ -340,8 +379,10 @@ void startServices() {
   // OTA（PlatformIO：pio run -e ota -t upload）
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.setPassword(OTA_PASSWORD);
-  ArduinoOTA.onStart([]() { app::log("OTA 升级开始，电机已停止"); });
-  ArduinoOTA.onError([](ota_error_t e) { app::log("OTA 失败：%u", (unsigned)e); });
+  ArduinoOTA.onStart([]() { LOG("OTA 升级开始，电机已停止"); });
+  ArduinoOTA.onError([](ota_error_t e) {
+    LOG("OTA 失败：%u %s", (unsigned)e, Update.getErrorString().c_str());
+  });
   ArduinoOTA.begin(gOwnMdns);
 
   server.on("/", HTTP_GET, handleRoot);
@@ -349,6 +390,8 @@ void startServices() {
   server.on("/api/cmd", HTTP_POST, handleCmd);
   server.on("/api/settings", HTTP_POST, handleSettings);
   server.on("/api/mqtt", HTTP_POST, handleMqtt);
+  server.on("/api/log", HTTP_GET, handleLog);
+  server.on("/api/log/clear", HTTP_POST, handleLogClear);
   server.on("/api/reset", HTTP_POST, handleReset);
   updater.setup(&server, "/update", "admin", OTA_PASSWORD);
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
@@ -357,9 +400,9 @@ void startServices() {
 
   gServicesUp = true;
   if (gOwnMdns)
-    app::log("设备网页：http://%s/ 或 http://%s.local/", WiFi.localIP().toString().c_str(), HOSTNAME);
+    LOG("设备网页：http://%s/ 或 http://%s.local/", WiFi.localIP().toString().c_str(), HOSTNAME);
   else
-    app::log("设备网页：http://%s/", WiFi.localIP().toString().c_str());
+    LOG("设备网页：http://%s/", WiFi.localIP().toString().c_str());
 }
 
 }  // namespace
@@ -389,14 +432,15 @@ void begin() {
   wm.setSaveParamsCallback(onSaveParams);
 
   app::setNetLed(app::NetLed::Slow);
-  app::log(saved ? "连接已保存的 WiFi..." : "尚未配网");
+  if (saved) LOG("连接已保存的 WiFi...");
+  else LOG("尚未配网");
   if (wm.autoConnect(AP_NAME, apPass())) {
     gPhase = Phase::Online;
   } else if (saved) {
-    goOffline("暂时连不上 WiFi，后台重连中（3 分钟后仍连不上会打开 SEMI-AMS 配网热点）");
+    goOffline(PSTR("暂时连不上 WiFi，后台重连中（3 分钟后仍连不上会打开 SEMI-AMS 配网热点）"));
   } else {
     gPhase = Phase::Portal;
-    app::log("配网模式：手机连接热点 %s，在弹出的页面（或 192.168.4.1）选择 WiFi 并填写点灯密钥", AP_NAME);
+    LOG("配网模式：手机连接热点 %s，在弹出的页面（或 192.168.4.1）选择 WiFi 并填写点灯密钥", AP_NAME);
   }
 }
 
@@ -408,7 +452,7 @@ void loop() {
       wm.process();
       if (!wm.getConfigPortalActive()) {
         if (WiFi.status() == WL_CONNECTED) gPhase = Phase::Online;
-        else goOffline("配网热点已关闭，后台继续尝试连接已保存的 WiFi");
+        else goOffline(PSTR("配网热点已关闭，后台继续尝试连接已保存的 WiFi"));
       }
       break;
 
@@ -419,7 +463,7 @@ void loop() {
         gPhase = Phase::Portal;
         wm.setEnableConfigPortal(true);
         wm.startConfigPortal(AP_NAME, apPass());  // 非阻塞，PORTAL_TIMEOUT_S 后自动关闭
-        app::log("一直连不上 WiFi，打开配网热点 %s（%d 分钟）", AP_NAME, PORTAL_TIMEOUT_S / 60);
+        LOG("一直连不上 WiFi，打开配网热点 %s（%d 分钟）", AP_NAME, PORTAL_TIMEOUT_S / 60);
       } else if (millis() - gLastRetry > 60000) {
         gLastRetry = millis();
         WiFi.begin();
@@ -436,7 +480,7 @@ void loop() {
           WiFi.hostname(HOSTNAME);
           return;
         }
-        app::log("未设置点灯密钥，不启用 Blinker（本地按键和网页照常可用）");
+        LOG("未设置点灯密钥，不启用 Blinker（本地按键和网页照常可用）");
       }
       if (!gServicesUp && conn) startServices();
       if (gServicesUp) {
@@ -450,8 +494,8 @@ void loop() {
 
   if (conn != gWasConnected) {
     gWasConnected = conn;
-    if (conn) app::log("WiFi 已连接：%s  IP %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-    else app::log("WiFi 已断开");
+    if (conn) LOG("WiFi 已连接：%s  IP %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+    else LOG("WiFi 已断开");
   }
 
   if (gPhase == Phase::Portal) app::setNetLed(app::NetLed::Fast);
@@ -463,11 +507,11 @@ bool connected() { return WiFi.status() == WL_CONNECTED; }
 String ip() { return WiFi.localIP().toString(); }
 
 void resetAll() {
-  app::log("清除 WiFi 和点灯密钥");
+  LOG("清除 WiFi 和点灯密钥");
   settingsSetBlinkerKey("");
   settingsSave();
   wm.resetSettings();
-  app::requestRestart("重置配网");
+  app::requestRestart(PSTR("重置配网"));
 }
 
 }  // namespace net

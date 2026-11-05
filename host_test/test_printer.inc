@@ -249,7 +249,11 @@ static void test_bambu_unload() {
   p.wait(2000);
   CHECK(p.unload());
 
-  // 空闲时传感器从有变无：备用判断直接退料
+  // 空闲时传感器从有变无：备用判断直接退料（3 分钟内刚退过料时不重复触发）
+  p.msg(status("\"hw_switch_state\":0"));
+  CHECK(!p.unload());
+  p.msg(status("\"hw_switch_state\":1"));
+  p.wait(200000);
   p.msg(status("\"hw_switch_state\":0"));
   CHECK(p.unload());
   // 收到退料命令时打印机里已经没有耗材：马上退
@@ -430,3 +434,42 @@ static void test_mqtt_reader_edge() {
   r.feed(qos3, sizeof(qos3));
   CHECK(r.error());
 }
+
+static void test_bambu_pull_out_prompt() {
+  title("外置料盘退料：打印机提示拔出耗材（0x07FFC003）就马上退；之后传感器变化不重复触发");
+  Printer p;
+  p.b.setUnloadWaitMs(120000);
+  p.msg(status("\"gcode_state\":\"RUNNING\",\"print_error\":0," + extruder(78, 65280)));
+  p.msg(status("\"gcode_state\":\"FAILED\",\"print_error\":50348044"));  // 0x0300400C 打印任务已取消
+  CHECK(!p.unload());
+  p.msg("{\"print\":{\"command\":\"ams_change_filament\",\"ams_id\":255,\"slot_id\":255,\"target\":255}}");
+  CHECK(!p.unload() && p.b.unloadPending());
+  p.wait(44000);
+  p.msg(status("\"print_error\":134201347"));  // 0x07FFC003 请从挤出机拔出外置料盘的耗材
+  CHECK(p.unload());
+  CHECK(!p.b.unloadPending());
+  p.wait(2000);
+  p.msg(status(extruder(76, 65535)));  // 进料器把耗材拉出来了
+  CHECK(!p.unload());                  // 不重复触发
+  // 没有收到退料命令也认这个提示（例如在屏幕上退料）
+  Printer q;
+  q.msg(status("\"gcode_state\":\"FINISH\",\"print_error\":0"));
+  q.msg(status("\"print_error\":134201347"));
+  CHECK(q.unload());
+}
+
+static void test_fsm_both_halls_warning() {
+  title("打印中两颗霍尔同时有效：不送料，并在备注里提示");
+  Sim s(Inputs{true, true, true, false});
+  s.press(true);
+  s.run(50);
+  CHECK(s.m() == MotorDir::Forward);
+  s.in.full = true;  // EMPTY 和 FULL 同时有效
+  s.run(20);
+  CHECK(s.m() == MotorDir::Stop);
+  CHECK(std::strcmp(s.fsm.note(), "EMPTY和FULL同时有效，不送料") == 0);
+  s.in.lack = false;
+  s.run(20);
+  CHECK(std::strcmp(s.fsm.note(), "") == 0);
+}
+

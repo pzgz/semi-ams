@@ -19,6 +19,8 @@ namespace {
 
 char gAuth[40];
 bool gStarted = false;
+uint32_t gStartedAt = 0;
+bool gInitDone = false;  // 点灯已完成第一次连接后的初始化
 uint32_t gLastPush = 0;
 uint32_t gLastRev = 0;
 bool gConnected = false;
@@ -39,31 +41,31 @@ BlinkerNumber numRssi((char*)"num-rssi");
 bool isTap(const String& s) { return s == BLINKER_CMD_BUTTON_TAP; }
 
 void onStartStop(const String& s) {
-  if (isTap(s)) app::requestStartStop("App");
+  if (isTap(s)) app::requestStartStop(PSTR("App"));
 }
 void onEmergency(const String& s) {
-  if (isTap(s)) app::requestEmergency("App");
+  if (isTap(s)) app::requestEmergency(PSTR("App"));
 }
 void onRestart(const String& s) {
-  if (isTap(s)) app::requestRestart("App");
+  if (isTap(s)) app::requestRestart(PSTR("App"));
 }
 void pushMqtt() {
   const char* text;
   const char* color;
   if (!settingsMqttConfigured()) {
-    text = "MQTT未设置";
+    text = PSTR("MQTT未设置");
     color = "#595959";
   } else if (!printer::enabled()) {
-    text = "MQTT已关闭";
+    text = PSTR("MQTT已关闭");
     color = "#595959";
   } else if (printer::connected()) {
-    text = "MQTT已连接";
+    text = PSTR("MQTT已连接");
     color = "#00A90C";
   } else {
-    text = "MQTT连接中";
+    text = PSTR("MQTT连接中");
     color = "#FBA613";
   }
-  btnMqtt.text(text);
+  btnMqtt.text(String(FPSTR(text)));  // text 在 Flash 里
   btnMqtt.color(color);
   btnMqtt.print();
   gLastMqttRev = printer::revision();
@@ -72,17 +74,17 @@ void pushMqtt() {
 void onMqtt(const String& s) {
   if (!isTap(s)) return;
   if (!settingsMqttConfigured()) {
-    texHint.print(String("先在网页填写打印机IP、序列号和访问码：http://") + WiFi.localIP().toString());
+    texHint.print(String(F("先在网页填写打印机IP、序列号和访问码：http://")) + WiFi.localIP().toString());
   } else {
     printer::setEnabled(!printer::enabled());
-    texHint.print(printer::enabled() ? "拓竹打印机MQTT已开启" : "拓竹打印机MQTT已关闭");
+    texHint.print(String(printer::enabled() ? F("拓竹打印机MQTT已开启") : F("拓竹打印机MQTT已关闭")));
   }
   pushMqtt();
 }
 
 String motorText() {
   app::Status s = app::status();
-  return semi::Fsm::motorName(s.motor);
+  return String(FPSTR(semi::Fsm::motorName(s.motor)));
 }
 
 void pushState() {
@@ -96,7 +98,7 @@ void heartbeat() {
   texRuntime.print(app::uptimeText());
   numRssi.print(WiFi.RSSI());
   texIp.print(WiFi.localIP().toString());
-  texHint.print(String("网页调参：http://") + WiFi.localIP().toString());
+  texHint.print(String(F("网页调参：http://")) + WiFi.localIP().toString());
   pushMqtt();
   gLastPush = millis();
   gLastRev = app::status().rev;
@@ -118,12 +120,17 @@ void begin(const char* authKey) {
   btnMqtt.attach(onMqtt);
   Blinker.attachHeartbeat(heartbeat);
   gStarted = true;
-  app::log("点灯 Blinker 已启动");
+  gStartedAt = millis();
+  LOG("点灯 Blinker 已启动");
 }
 
 void loop() {
   if (!gStarted) return;
   Blinker.run();
+  if (!gInitDone && Blinker.init()) {
+    gInitDone = true;
+    LOG("点灯初始化完成（空闲内存 %u，最大连续 %u）", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxFreeBlockSize());
+  }
   // Blinker.connected() 未连上时会触发连接流程，可能阻塞，所以每 10 秒查一次并缓存
   if (millis() - gLastConnCheck > 10000) {
     gLastConnCheck = millis();
@@ -143,15 +150,21 @@ void loop() {
 
 bool started() { return gStarted; }
 
+bool settled() {
+  if (!gSettings.blinkerKey[0]) return true;  // 不用点灯
+  if (!gStarted) return false;                 // 还没启动（WiFi 还没连上）
+  return gInitDone || millis() - gStartedAt > CLOUD_SETTLE_MAX_MS;
+}
+
 const char* statusText() {
-  if (!gStarted) return "未启用";
-  return gConnected ? "已连接" : "连接中";
+  if (!gStarted) return PSTR("未启用");
+  return gConnected ? PSTR("已连接") : PSTR("连接中");
 }
 
 void showRestarting() {
   if (!gStarted) return;
-  texState.print("系统重启中...");
-  texMotor.print("停止");
+  texState.print(String(F("系统重启中...")));
+  texMotor.print(String(F("停止")));
   Blinker.delay(1200);  // 等消息发出
 }
 

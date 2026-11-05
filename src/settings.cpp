@@ -1,6 +1,7 @@
 #include "settings.h"
 
 #include <LittleFS.h>
+#include <pgmspace.h>
 #include <ctype.h>
 #include <stdio.h>
 
@@ -8,18 +9,31 @@ Settings gSettings;
 
 static const char* kFile = "/settings.txt";
 
+// 参数的中文名放在 Flash 里（PROGMEM），读取时用 FPSTR() 或 %S
+static const char kL_load_speed[] PROGMEM = "吸入速度";
+static const char kL_feed_speed[] PROGMEM = "补料速度";
+static const char kL_unload_speed[] PROGMEM = "退料速度";
+static const char kL_motor_invert[] PROGMEM = "电机方向反转";
+static const char kL_insert_delay_ms[] PROGMEM = "插入后延时吸入";
+static const char kL_load_timeout_s[] PROGMEM = "吸入超时";
+static const char kL_first_feed_timeout_s[] PROGMEM = "开始打印首次送料超时";
+static const char kL_feed_timeout_s[] PROGMEM = "打印中补料超时";
+static const char kL_unload_timeout_s[] PROGMEM = "退料超时";
+static const char kL_unload_extra_ms[] PROGMEM = "退料离开就绪开关后多退";
+static const char kL_tail_feed_ms[] PROGMEM = "耗材用尽后送出料尾最长";
+
 static const SettingDef kDefs[] = {
-    {"load_speed", "吸入速度", "%", 10, 100},
-    {"feed_speed", "补料速度", "%", 10, 100},
-    {"unload_speed", "退料速度", "%", 10, 100},
-    {"motor_invert", "电机方向反转", "0/1", 0, 1},
-    {"insert_delay_ms", "插入后延时吸入", "ms", 0, 5000},
-    {"load_timeout_s", "吸入超时", "s", 3, 600},
-    {"first_feed_timeout_s", "开始打印首次送料超时", "s", 5, 900},
-    {"feed_timeout_s", "打印中补料超时", "s", 3, 600},
-    {"unload_timeout_s", "退料超时", "s", 5, 900},
-    {"unload_extra_ms", "退料离开就绪开关后多退", "ms", 0, 10000},
-    {"tail_feed_ms", "耗材用尽后送出料尾最长", "ms", 0, 30000},
+    {"load_speed", kL_load_speed, "%", 10, 100},
+    {"feed_speed", kL_feed_speed, "%", 10, 100},
+    {"unload_speed", kL_unload_speed, "%", 10, 100},
+    {"motor_invert", kL_motor_invert, "0/1", 0, 1},
+    {"insert_delay_ms", kL_insert_delay_ms, "ms", 0, 5000},
+    {"load_timeout_s", kL_load_timeout_s, "s", 3, 600},
+    {"first_feed_timeout_s", kL_first_feed_timeout_s, "s", 5, 900},
+    {"feed_timeout_s", kL_feed_timeout_s, "s", 3, 600},
+    {"unload_timeout_s", kL_unload_timeout_s, "s", 5, 900},
+    {"unload_extra_ms", kL_unload_extra_ms, "ms", 0, 10000},
+    {"tail_feed_ms", kL_tail_feed_ms, "ms", 0, 30000},
 };
 
 const SettingDef* settingDefs(size_t& count) {

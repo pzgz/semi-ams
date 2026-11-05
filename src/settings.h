@@ -18,7 +18,7 @@ struct Settings {
 
 struct SettingDef {
   const char* key;
-  const char* label;
+  const char* label;  // 中文名，在 Flash 里（PROGMEM）：用 FPSTR() 或 %S 读
   const char* unit;
   long min;
   long max;

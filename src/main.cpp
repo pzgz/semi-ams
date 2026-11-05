@@ -6,6 +6,7 @@
 //           缓冲器满了能及时停电机。
 //   loop()  网络、点灯 App、网页、串口命令、日志输出、定时重启。
 #include <Arduino.h>
+#include <LittleFS.h>
 #include <Ticker.h>
 #include <Updater.h>
 #include <stdarg.h>
@@ -13,6 +14,7 @@
 #include "app.h"
 #include "cloud.h"
 #include "config.h"
+#include "crash.h"
 #include "fsm.h"
 #include "input.h"
 #include "motor_logic.h"
@@ -75,12 +77,14 @@ struct LogEntry {
   uint32_t sec;
   char msg[104];
 };
-constexpr size_t kLogN = 24;
+constexpr size_t kLogN = 16;  // 内存里只留最近 16 条（更早的在日志文件里）
 LogEntry gLogs[kLogN];
 uint32_t gLogHead = 0;     // 已写入总数
 uint32_t gLogPrinted = 0;  // 已输出到串口的数量
+uint32_t gLogFiled = 0;    // 已写进日志文件的数量
+uint32_t gLogFileAt = 0;   // 上次写文件的时间
 
-void fsmLogger(const char* m) { app::log("%s", m); }
+void fsmLogger(const char* m) { LOG("%s", m); }
 
 // ---------- 电机输出 ----------
 void applyPin(uint8_t pin, const semi::PinOut& o) {
@@ -140,7 +144,7 @@ void tick() {
         gTickLateCount = gTickLateCount + 1;
         if (!lastLateLog || now - lastLateLog > 2000) {
           lastLateLog = now | 1;
-          app::log("定时任务被推迟 %lums（累计 %lu 次）", (unsigned long)gap, (unsigned long)gTickLateCount);
+          LOG("定时任务被推迟 %lums（累计 %lu 次）", (unsigned long)gap, (unsigned long)gTickLateCount);
         }
       }
     }
@@ -158,7 +162,7 @@ void tick() {
   changed |= gLack.update(digitalRead(PIN_HALL_EMPTY) == LOW);
   changed |= gFull.update(digitalRead(PIN_HALL_FULL) == LOW);
   if (changed) {
-    app::log("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(),
+    LOG("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(),
              gLack.value(), gFull.value());
   }
 
@@ -177,27 +181,27 @@ void tick() {
     if (prevStart) {
       startPressAt = now;
       startFallsAtPress = gStartFalls;
-      app::log("黑色按钮按下");
+      LOG("黑色按钮按下");
     } else {
-      app::log("黑色按钮松开（按住 %lums，期间触点断开又接通 %lu 次）", (unsigned long)(now - startPressAt),
+      LOG("黑色按钮松开（按住 %lums，期间触点断开又接通 %lu 次）", (unsigned long)(now - startPressAt),
                (unsigned long)(gStartFalls - startFallsAtPress));
     }
   }
   if (gBtnEmergency.pressed() != prevEmg) {
     prevEmg = gBtnEmergency.pressed();
-    app::log("红色按钮%s", prevEmg ? "按下" : "松开");
+    LOG("红色按钮" SEMI_PS, prevEmg ? PSTR("按下") : PSTR("松开"));
   }
-  if (rs.blip) app::log("黑色按钮信号太短（不到 20ms），未识别");
-  if (re.blip) app::log("红色按钮信号太短（不到 20ms），未识别");
+  if (rs.blip) LOG("黑色按钮信号太短（不到 20ms），未识别");
+  if (re.blip) LOG("红色按钮信号太短（不到 20ms），未识别");
   if (rs.shortPress) {
     cmd.startStop = true;
-    app::log("黑色按钮：开始/结束");
+    LOG("黑色按钮：开始/结束");
   }
   if (re.shortPress) {
     cmd.emergency = true;
-    app::log("红色按钮：紧急停止/解除");
+    LOG("红色按钮：紧急停止/解除");
   }
-  if ((rs.longPress || re.longPress) && !gRestartReason) gRestartReason = "长按按键";
+  if ((rs.longPress || re.longPress) && !gRestartReason) gRestartReason = PSTR("长按按键");
 
   if (gReqStartStop) {
     gReqStartStop = false;
@@ -220,7 +224,7 @@ void tick() {
   if (Update.isRunning()) {
     if (!gOtaStopped) {
       gOtaStopped = true;
-      gFsm.forceEmergency("固件升级中", now);
+      gFsm.forceEmergency(PSTR("固件升级中"), now);
     }
   } else {
     gOtaStopped = false;
@@ -245,7 +249,7 @@ void tick() {
       mc.speed = gJogSpeed;
     } else {
       gJogUntil = 0;
-      app::log("点动结束");
+      LOG("点动结束");
     }
   }
 
@@ -287,11 +291,11 @@ void printHelp() {
 }
 
 void printMqtt() {
-  Serial.printf("拓竹打印机：%s  启用:%s  IP:%s  序列号:%s  访问码:%s  退料等待:%us\n",
-                printer::statusText().c_str(), gSettings.mqttEnable ? "是" : "否",
+  Serial.printf_P(PSTR("拓竹打印机：%s  启用:" SEMI_PS "  IP:%s  序列号:%s  访问码:" SEMI_PS "  退料等待:%us\n"),
+                printer::statusText().c_str(), gSettings.mqttEnable ? PSTR("是") : PSTR("否"),
                 gSettings.mqttIp[0] ? gSettings.mqttIp : "-", gSettings.mqttSn[0] ? gSettings.mqttSn : "-",
-                gSettings.mqttCode[0] ? "已设置" : "-", (unsigned)gSettings.mqttUnloadWaitS);
-  Serial.printf("  打印机：%s  最近事件：%s\n", printer::printerText().c_str(), printer::lastEvent());
+                gSettings.mqttCode[0] ? PSTR("已设置") : "-", (unsigned)gSettings.mqttUnloadWaitS);
+  Serial.printf_P(PSTR("  打印机：%s  最近事件：%s\n"), printer::printerText().c_str(), printer::lastEvent());
 }
 
 void handleMqttCmd(String rest) {
@@ -332,21 +336,22 @@ void handleMqttCmd(String rest) {
 
 void printStatus() {
   app::Status s = app::status();
-  Serial.printf("状态：%s  电机：%s %u%%\n", app::stateText().c_str(), semi::Fsm::motorName(s.motor),
+  Serial.printf_P(PSTR("状态：%s  电机：" SEMI_PS " %u%%\n"), app::stateText().c_str(), semi::Fsm::motorName(s.motor),
                 s.duty);
-  Serial.printf("进料口:%d 就绪:%d EMPTY:%d FULL:%d\n", s.in, s.ready, s.lack, s.full);
-  Serial.printf("黑色按钮:%s（GPIO0=%s）  红色按钮:%s（GPIO15=%s）\n", s.btnStart ? "按下" : "松开",
-                s.rawGpio0 ? "高" : "低", s.btnEmg ? "按下" : "松开", s.rawGpio15 ? "高" : "低");
-  Serial.printf("定时任务：最近最大间隔 %lums，被推迟（>=%dms）累计 %lu 次\n", (unsigned long)s.tickGapMs,
+  Serial.printf_P(PSTR("进料口:%d 就绪:%d EMPTY:%d FULL:%d\n"), s.in, s.ready, s.lack, s.full);
+  Serial.printf_P(PSTR("黑色按钮:" SEMI_PS "（GPIO0=" SEMI_PS "）  红色按钮:" SEMI_PS "（GPIO15=" SEMI_PS "）\n"),
+                s.btnStart ? PSTR("按下") : PSTR("松开"), s.rawGpio0 ? PSTR("高") : PSTR("低"),
+                s.btnEmg ? PSTR("按下") : PSTR("松开"), s.rawGpio15 ? PSTR("高") : PSTR("低"));
+  Serial.printf_P(PSTR("定时任务：最近最大间隔 %lums，被推迟（>=%dms）累计 %lu 次\n"), (unsigned long)s.tickGapMs,
                 TICK_LATE_MS, (unsigned long)s.tickLate);
-  Serial.printf("运行：%s  WiFi：%s %s  点灯：%s\n", app::uptimeText().c_str(),
-                net::connected() ? "已连接" : "未连接", net::ip().c_str(), cloud::statusText());
+  Serial.printf_P(PSTR("运行：%s  WiFi：" SEMI_PS " %s  点灯：" SEMI_PS "\n"), app::uptimeText().c_str(),
+                net::connected() ? PSTR("已连接") : PSTR("未连接"), net::ip().c_str(), cloud::statusText());
   size_t n;
   const SettingDef* defs = settingDefs(n);
   for (size_t i = 0; i < n; i++)
-    Serial.printf("  %-22s = %ld %s  (%s)\n", defs[i].key, settingsGet(defs[i].key), defs[i].unit,
+    Serial.printf_P(PSTR("  %-22s = %ld %s  (" SEMI_PS ")\n"), defs[i].key, settingsGet(defs[i].key), defs[i].unit,
                   defs[i].label);
-  Serial.printf("  blinker_key            = %s\n", gSettings.blinkerKey[0] ? "（已设置）" : "（未设置）");
+  Serial.printf_P(PSTR("  blinker_key            = " SEMI_PS "\n"), gSettings.blinkerKey[0] ? PSTR("（已设置）") : PSTR("（未设置）"));
   printMqtt();
 }
 
@@ -364,11 +369,11 @@ void handleSerialLine(String line) {
   } else if (cmd == "status") {
     printStatus();
   } else if (cmd == "start") {
-    app::requestStartStop("串口");
+    app::requestStartStop(PSTR("串口"));
   } else if (cmd == "emg") {
-    app::requestEmergency("串口");
+    app::requestEmergency(PSTR("串口"));
   } else if (cmd == "restart") {
-    app::requestRestart("串口命令");
+    app::requestRestart(PSTR("串口命令"));
   } else if (cmd == "mqtt") {
     handleMqttCmd(rest);
   } else if (cmd == "wifireset") {
@@ -388,7 +393,7 @@ void handleSerialLine(String line) {
     if (settingsSet(k.c_str(), v)) {
       settingsSave();
       app::applySettings();
-      Serial.printf("%s = %ld 已保存\n", k.c_str(), v);
+      Serial.printf_P(PSTR("%s = %ld 已保存\n"), k.c_str(), v);
     } else {
       Serial.println(F("参数名错误或超出范围，输入 status 查看"));
     }
@@ -418,11 +423,40 @@ void pollSerial() {
   }
 }
 
+// 日志同时写进 LittleFS 的 /log.txt（超过 48KB 换到 /log1.txt），重启后也能看，网页可以下载。
+// 攒一批再写（10 秒一次或攒够 8 条），减少 Flash 擦写；只在 loop() 里写，tick 里只写内存
+void fileLogs(bool force) {
+  const uint32_t pending = gLogHead - gLogFiled;
+  if (!pending) return;
+  if (!force && pending < 8 && millis() - gLogFileAt < 10000) return;
+  gLogFileAt = millis();
+  File f = LittleFS.open(app::kLogFile, "a");
+  if (!f) {
+    gLogFiled = gLogHead;
+    return;
+  }
+  if (pending > kLogN) {
+    f.printf_P(PSTR("（丢失 %lu 条日志）\n"), (unsigned long)(pending - kLogN));
+    gLogFiled = gLogHead - kLogN;
+  }
+  while (gLogFiled < gLogHead) {
+    const LogEntry& e = gLogs[gLogFiled % kLogN];
+    f.printf("[%6lu] %s\n", (unsigned long)e.sec, e.msg);
+    gLogFiled++;
+  }
+  const size_t size = f.size();
+  f.close();
+  if (size > 48 * 1024) {
+    LittleFS.remove(app::kLogFileOld);
+    LittleFS.rename(app::kLogFile, app::kLogFileOld);
+  }
+}
+
 void flushLogs() {
   if (gLogHead - gLogPrinted > kLogN) gLogPrinted = gLogHead - kLogN;
   while (gLogPrinted < gLogHead) {
     const LogEntry& e = gLogs[gLogPrinted % kLogN];
-    Serial.printf("[%6lu] %s\n", (unsigned long)e.sec, e.msg);
+    Serial.printf_P(PSTR("[%6lu] %s\n"), (unsigned long)e.sec, e.msg);
     gLogPrinted++;
   }
 }
@@ -433,23 +467,23 @@ void flushLogs() {
 namespace app {
 
 void requestStartStop(const char* source) {
-  log("%s：开始/结束", source);
+  LOG(SEMI_PS "：开始/结束", source);
   gReqStartStop = true;
 }
 
 void requestEmergency(const char* source) {
-  log("%s：紧急停止/解除", source);
+  LOG(SEMI_PS "：紧急停止/解除", source);
   gReqEmergency = true;
 }
 
 void requestPrinterStart(const char* reason) {
-  log("%s", reason);
+  LOG(SEMI_PS, reason);
   gReqPrinterUnload = false;
   gReqPrinterStart = true;
 }
 
 void requestPrinterUnload(const char* reason) {
-  log("%s", reason);
+  LOG(SEMI_PS, reason);
   gReqPrinterStart = false;
   gReqPrinterUnload = true;
 }
@@ -468,7 +502,7 @@ bool requestJog(MotorDir dir, uint8_t speed, uint32_t ms) {
   gJogDir = dir;
   gJogSpeed = speed;
   gJogUntil = millis() + ms;
-  log("点动：%s %u%% %lums", semi::Fsm::motorName(dir), speed, (unsigned long)ms);
+  LOG("点动：" SEMI_PS " %u%% %lums", semi::Fsm::motorName(dir), speed, (unsigned long)ms);
   return true;
 }
 
@@ -503,29 +537,29 @@ uint64_t uptimeMs() { return micros64() / 1000ULL; }
 String uptimeText() {
   uint64_t m = uptimeMs() / 60000ULL;
   char buf[40];
-  snprintf(buf, sizeof(buf), "%u天%u时%u分", (unsigned)(m / 1440), (unsigned)((m / 60) % 24),
+  snprintf_P(buf, sizeof(buf), PSTR("%u天%u时%u分"), (unsigned)(m / 1440), (unsigned)((m / 60) % 24),
            (unsigned)(m % 60));
   return String(buf);
 }
 
 String stateText() {
-  String s = semi::Fsm::stateName(gFsm.state());
+  // 状态名和备注在 Flash 里（ESP8266），不能直接逐字节读
+  String s(FPSTR(semi::Fsm::stateName(gFsm.state())));
   const char* n = gFsm.note();
-  if (n && *n) {
-    s += "（";
-    s += n;
-    s += "）";
+  if (n && pgm_read_byte(n)) {
+    s += F("（");
+    s += FPSTR(n);
+    s += F("）");
   }
   return s;
 }
 
-void log(const char* fmt, ...) {
+namespace {
+// fmt 在 Flash 里时 pgm = true
+void vlogEntry(bool pgm, const char* fmt, va_list ap) {
   LogEntry& e = gLogs[gLogHead % kLogN];
   e.sec = (uint32_t)(uptimeMs() / 1000ULL);
-  va_list ap;
-  va_start(ap, fmt);
-  const int n = vsnprintf(e.msg, sizeof(e.msg), fmt, ap);
-  va_end(ap);
+  const int n = pgm ? vsnprintf_P(e.msg, sizeof(e.msg), fmt, ap) : vsnprintf(e.msg, sizeof(e.msg), fmt, ap);
   if (n >= (int)sizeof(e.msg)) {
     // 被截断时不要留下半个汉字：找到最后一个字符的起始字节，字节数不够就去掉它
     const size_t len = strlen(e.msg);
@@ -538,6 +572,21 @@ void log(const char* fmt, ...) {
     }
   }
   gLogHead++;
+}
+}  // namespace
+
+void log(const char* fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vlogEntry(false, fmt, ap);
+  va_end(ap);
+}
+
+void logP(const char* fmtP, ...) {
+  va_list ap;
+  va_start(ap, fmtP);
+  vlogEntry(true, fmtP, ap);
+  va_end(ap);
 }
 
 size_t logCount() { return gLogHead < kLogN ? gLogHead : kLogN; }
@@ -577,9 +626,18 @@ void setup() {
 
   Serial.begin(115200);
   Serial.println();
-  app::log("%s 复刻固件 v%s 启动，输入 help 查看串口命令", FW_NAME, FW_VERSION);
+  LOG("==== %s v%s 启动（重启原因：%s）", FW_NAME, FW_VERSION, ESP.getResetReason().c_str());
+  {
+    // 闪存芯片的实际容量（按芯片 ID）和固件按多大编译。实际比固件小时，网页升级和 OTA 都会被
+    // 拒绝（Flash config wrong），只能用串口烧录
+    uint32_t realKb = ESP.getFlashChipRealSize() / 1024, sdkKb = ESP.getFlashChipSize() / 1024;
+    LOG("闪存：ID %06X，实际 %u KB，固件按 %u KB" SEMI_PS, (unsigned)ESP.getFlashChipId(),
+             (unsigned)realKb, (unsigned)sdkKb,
+             realKb < sdkKb ? PSTR("（芯片偏小，只能串口烧录）") : "");
+  }
+  crash::reportLast();
 
-  if (!settingsBegin()) app::log("文件系统挂载失败，使用默认参数");
+  if (!settingsBegin()) LOG("文件系统挂载失败，使用默认参数");
 
   semi::MotorLogic::Config mcfg;
   mcfg.startDuty = MOTOR_START_DUTY;
@@ -598,7 +656,7 @@ void setup() {
   gBtnStart.reset(digitalRead(PIN_BTN_START) == LOW);
   attachInterrupt(digitalPinToInterrupt(PIN_BTN_START), onStartFall, FALLING);
   gBtnEmergency.reset(digitalRead(PIN_BTN_EMERGENCY) == HIGH);
-  app::log("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(), gLack.value(),
+  LOG("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(), gLack.value(),
            gFull.value());
 
   // 上电不自动转电机：进料口有耗材时进入"已退料"，按黑色按钮吸料
@@ -611,10 +669,12 @@ void setup() {
 }
 
 void loop() {
+  crash::noteHeap(ESP.getFreeHeap());
   net::loop();
   printer::loop();
   pollSerial();
   flushLogs();
+  fileLogs(false);
 
   // 运行满 7 天，空闲时自动重启
   static uint32_t lastCheck = 0;
@@ -622,15 +682,16 @@ void loop() {
     lastCheck = millis();
     uint64_t days = app::uptimeMs() / 86400000ULL;
     if (days >= AUTO_RESTART_DAYS && gFsm.isIdle() && !gRestartReason) {
-      app::log("系统已运行%u天，定期自动重启中...", (unsigned)days);
-      gRestartReason = "定期重启";
+      LOG("系统已运行%u天，定期自动重启中...", (unsigned)days);
+      gRestartReason = PSTR("定期重启");
     }
   }
 
   if (gRestartReason) {
     gHaltMotor = true;
-    app::log("系统重启中...（%s）", gRestartReason);
+    LOG("系统重启中...（" SEMI_PS "）", gRestartReason);
     flushLogs();
+    fileLogs(true);
     cloud::showRestarting();
     delay(300);  // 等电机刹车完成
     ESP.restart();

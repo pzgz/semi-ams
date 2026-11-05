@@ -1,3 +1,5 @@
 .pio/
 .vscode/
 .DS_Store
+bambu_log_*.jsonl
+logs/

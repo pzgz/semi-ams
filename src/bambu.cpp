@@ -1,5 +1,7 @@
 #include "bambu.h"
 
+#include "pgm.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +26,16 @@ bool startsWithNoCase(const char* s, const char* prefix) {
   return true;
 }
 
-const char* hwText(int v) { return v < 0 ? "未知" : (v ? "有耗材" : "无耗材"); }
+const char* hwText(int v) { return v < 0 ? SEMI_P("未知") : (v ? SEMI_P("有耗材") : SEMI_P("无耗材")); }
+
+// 外置料盘退料的最后一步：请从挤出机拔出外置料盘的耗材（07FE 是 H2 系列的另一个外置料盘）
+bool isPullOutPrompt(uint32_t e) { return e == 0x07FFC003UL || e == 0x07FEC003UL; }
+
+const char* errText(uint32_t e) {
+  if (e == 0x0300400CUL) return SEMI_P("（打印任务已取消）");
+  if (isPullOutPrompt(e)) return SEMI_P("（请从挤出机拔出外置料盘的耗材）");
+  return "";
+}
 
 }  // namespace
 
@@ -127,7 +138,7 @@ void BambuMonitor::handle(const JsonScanner& js, JsonScanner::Event ev, const ch
   } else if (js.pathIs("print", "print_error")) {
     if (num) {
       m_.hasErr = true;
-      m_.err = n;
+      m_.err = (uint32_t)strtoul(v, nullptr, 10);
     }
   }
 }
@@ -135,10 +146,11 @@ void BambuMonitor::handle(const JsonScanner& js, JsonScanner::Event ev, const ch
 void BambuMonitor::endMessage(uint32_t now) {
   if (js_.error() || !js_.done()) {
     badCount_++;
-    if (badCount_ == 1 || badCount_ % 50 == 0) logf("打印机消息格式无法解析（累计 %lu 条）", (unsigned long)badCount_);
+    if (badCount_ == 1 || badCount_ % 50 == 0) logf(SEMI_P("打印机消息格式无法解析（累计 %lu 条）"), (unsigned long)badCount_);
     return;
   }
   msgCount_++;
+  now_ = now;
 
   // ---- 状态字段（先处理料盘，再处理打印状态，备用的开始判断要用到料盘）----
   if (m_.hasSnow || m_.hasExtInfo) newProto_ = true;
@@ -147,25 +159,30 @@ void BambuMonitor::endMessage(uint32_t now) {
   if (m_.hasSnow) ext = m_.snowExt ? 1 : 0;
   else if (m_.hasTray && !newProto_) ext = m_.tray == 254 ? 1 : 0;
   if (ext >= 0 && ext != ext_) {
-    if (ext_ != -1 || ext) logf("打印机%s外置料盘", ext ? "正在用" : "没有用");
+    if (ext_ != -1 || ext) logf(SEMI_P("打印机" SEMI_PS "外置料盘"), ext ? SEMI_P("正在用") : SEMI_P("没有用"));
     ext_ = ext;
   }
   if (m_.hasStg && m_.stg != stg_) {
-    logf("打印机阶段：%d → %d", stg_, m_.stg);
+    logf(SEMI_P("打印机阶段：%d → %d"), stg_, m_.stg);
     stg_ = m_.stg;
   }
   if (m_.hasErr && m_.err != err_) {
-    if (m_.err) logf("打印机错误码：%ld", m_.err);
+    if (m_.err) logf(SEMI_P("打印机错误码：0x%08lX" SEMI_PS), (unsigned long)m_.err, errText(m_.err));
     err_ = m_.err;
+    // 打印机已切断耗材、回抽完，正在等人把耗材从挤出机拔出来：现在退料不会和挤出机对拉
+    if (isPullOutPrompt(err_)) {
+      pending_ = false;
+      requestUnload(SEMI_P("打印机提示拔出外置料盘的耗材，开始退料"));
+    }
   }
   if (m_.hasGcode && strcmp(m_.gcode, gcode_) != 0) {
     const bool known = gcode_[0] != 0;
     const bool wasPrinting = isPrinting(gcode_);
-    logf("打印机状态：%s → %s", known ? gcode_ : "?", m_.gcode);
+    logf(SEMI_P("打印机状态：%s → %s"), known ? gcode_ : "?", m_.gcode);
     copy(gcode_, sizeof(gcode_), m_.gcode);
     if (known && !wasPrinting && isStarting(gcode_)) {
       pending_ = false;
-      if (ext_ == 1) requestStart("打印机开始打印（外置料盘，按打印状态判断）");
+      if (ext_ == 1) requestStart(SEMI_P("打印机开始打印（外置料盘，按打印状态判断）"));
     }
   }
   // 挤出机里有没有耗材：新协议看 extruder.info 的 bit1，老协议看 hw_switch_state 的 bit0
@@ -175,16 +192,17 @@ void BambuMonitor::endMessage(uint32_t now) {
   else if (m_.hasHw && !newProto_) hw = m_.hw & 1;
   if (m_.hasHw) {
     raw = m_.hw;
-    if (newProto_ && raw != hwRaw_) logf("打印机 hw_switch_state：%d → %d", hwRaw_, raw);
+    if (newProto_ && raw != hwRaw_) logf(SEMI_P("打印机 hw_switch_state：%d → %d"), hwRaw_, raw);
     hwRaw_ = raw;
   }
   if (hw >= 0 && hw != hw_) {
     const int old = hw_;
     hw_ = hw;
-    if (raw >= 0) logf("打印机耗材传感器：%s → %s（hw_switch_state=%d）", hwText(old), hwText(hw_), raw);
-    else logf("打印机耗材传感器：%s → %s", hwText(old), hwText(hw_));
-    if (old == 1 && hw_ == 0 && !pending_ && gcode_[0] && !isActive(gcode_))
-      requestUnload("打印机空闲时耗材离开了打印机");
+    if (raw >= 0 && !m_.hasExtInfo) logf(SEMI_P("打印机耗材传感器：" SEMI_PS " → " SEMI_PS "（hw_switch_state=%d）"), hwText(old), hwText(hw_), raw);
+    else logf(SEMI_P("打印机耗材传感器：" SEMI_PS " → " SEMI_PS), hwText(old), hwText(hw_));
+    const bool recentlyUnloaded = everUnload_ && now - lastUnloadAt_ < 180000UL;
+    if (old == 1 && hw_ == 0 && !pending_ && !recentlyUnloaded && gcode_[0] && !isActive(gcode_))
+      requestUnload(SEMI_P("打印机空闲时耗材离开了打印机"));
   }
 
   // ---- 命令回报 ----
@@ -192,31 +210,32 @@ void BambuMonitor::endMessage(uint32_t now) {
     const bool failed = m_.result[0] && startsWithNoCase(m_.result, "fail");
     if (!strcmp(m_.command, "project_file")) {
       const bool ext = m_.useAms == 0 || m_.external;
-      logf("打印机开始打印（%s）%s", ext ? "外置料盘" : "AMS，不送料", failed ? "，但命令失败" : "");
+      logf(SEMI_P("打印机开始打印（" SEMI_PS "）" SEMI_PS), ext ? SEMI_P("外置料盘") : SEMI_P("AMS，不送料"),
+           failed ? SEMI_P("，但命令失败") : "");
       if (ext && !failed) {
         pending_ = false;
-        requestStart("打印机开始打印（外置料盘）");
+        requestStart(SEMI_P("打印机开始打印（外置料盘）"));
       }
     } else if (!strcmp(m_.command, "ams_change_filament")) {
       const int t = m_.target, a = m_.amsId, s = m_.slotId;
       // 退料：target 255，且 slot_id 不存在（老协议）或为 255；ams_id 存在时只认外置料盘（254/255）
       const bool unload = t == 255 && (s < 0 || s == 255) && (a < 0 || a == 254 || a == 255);
       const bool loadExt = t == 254 || (t == 255 && s >= 0 && s != 255) || ((a == 254 || a == 255) && s >= 0 && s != 255);
-      if (failed) logf("打印机换料命令失败（target=%d ams=%d slot=%d）", t, a, s);
-      else if (unload) unloadCommand(now, "打印机退料");
-      else if (loadExt) logf("打印机进料（外置料盘，target=%d ams=%d slot=%d）", t, a, s);
-      else logf("打印机换料（target=%d ams=%d slot=%d），不是外置料盘，忽略", t, a, s);
+      if (failed) logf(SEMI_P("打印机换料命令失败（target=%d ams=%d slot=%d）"), t, a, s);
+      else if (unload) unloadCommand(now, SEMI_P("打印机退料"));
+      else if (loadExt) logf(SEMI_P("打印机进料（外置料盘，target=%d ams=%d slot=%d）"), t, a, s);
+      else logf(SEMI_P("打印机换料（target=%d ams=%d slot=%d），不是外置料盘，忽略"), t, a, s);
     } else if (!strcmp(m_.command, "unload_filament")) {
-      if (!failed) unloadCommand(now, "打印机退料");
+      if (!failed) unloadCommand(now, SEMI_P("打印机退料"));
     } else {
-      logf("打印机命令：%s%s%s", m_.command, m_.result[0] ? " " : "", m_.result);
+      logf(SEMI_P("打印机命令：%s%s%s"), m_.command, m_.result[0] ? " " : "", m_.result);
     }
   }
 
   // 等待中的退料：打印机的耗材传感器已经是"无"
   if (pending_ && hw_ == 0) {
     pending_ = false;
-    requestUnload("打印机已退料，耗材已离开打印机");
+    requestUnload(SEMI_P("打印机已退料，耗材已离开打印机"));
   }
 }
 
@@ -228,14 +247,15 @@ void BambuMonitor::unloadCommand(uint32_t now, const char* what) {
   }
   pending_ = true;
   pendingSince_ = now;
-  logf("%s：等打印机切断耗材、退出它的传感器后再退（最长等 %lu 秒）", what, (unsigned long)(unloadWaitMs_ / 1000));
-  event("等待打印机退料");
+  logf(SEMI_P(SEMI_PS "：等打印机切断、回抽耗材后再退（最长等 %lu 秒）"), what, (unsigned long)(unloadWaitMs_ / 1000));
+  event(SEMI_P("等待打印机退料"));
 }
 
 void BambuMonitor::tick(uint32_t now) {
+  now_ = now;
   if (pending_ && now - pendingSince_ >= unloadWaitMs_) {
     pending_ = false;
-    requestUnload("打印机退料后等待超时，开始退料");
+    requestUnload(SEMI_P("打印机退料后等待超时，开始退料"));
   }
 }
 
@@ -257,17 +277,19 @@ void BambuMonitor::requestStart(const char* reason) {
   start_ = true;
   unload_ = false;
   startReason_ = reason;
-  event("开始打印 → 送料");
+  event(SEMI_P("开始打印 → 送料"));
 }
 
 void BambuMonitor::requestUnload(const char* reason) {
+  everUnload_ = true;
+  lastUnloadAt_ = now_;
   unload_ = true;
   start_ = false;
   unloadReason_ = reason;
-  event("打印机退料 → 退料");
+  event(SEMI_P("打印机退料 → 退料"));
 }
 
-void BambuMonitor::event(const char* text) { copy(lastEvent_, sizeof(lastEvent_), text); }
+void BambuMonitor::event(const char* text) { semi_copy_P(lastEvent_, text, sizeof(lastEvent_)); }  // text 在 Flash 里
 
 bool BambuMonitor::isActive(const char* s) {
   return !strcmp(s, "PREPARE") || !strcmp(s, "RUNNING") || !strcmp(s, "PAUSE") || !strcmp(s, "SLICING");
@@ -284,7 +306,7 @@ void BambuMonitor::logf(const char* fmt, ...) {
   char buf[112];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(buf, sizeof(buf), fmt, ap);
+  SEMI_VSNPRINTF(buf, sizeof(buf), fmt, ap);  // fmt 在 Flash 里（SEMI_P）
   va_end(ap);
   log_(buf);
 }

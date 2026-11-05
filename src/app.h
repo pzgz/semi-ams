@@ -3,10 +3,12 @@
 #include <Arduino.h>
 
 #include "fsm.h"
+#include "pgm.h"
 
 namespace app {
 
 // 远程命令（App / 网页 / 串口），在下一个 10ms 周期由状态机处理
+// source / reason 可以是 Flash 字符串（PSTR），日志里用 %S 打印
 void requestStartStop(const char* source);
 void requestEmergency(const char* source);
 void requestRestart(const char* reason);
@@ -38,6 +40,19 @@ String uptimeText();  // x天x时x分
 String stateText();   // 状态 + 备注
 
 void log(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+// 格式字符串在 Flash 里（PSTR）的版本。ESP8266 的字符串常量默认放在内存里，日志里的中文很多，
+// 全放内存要占好几 KB；内存不够时点灯、mDNS 申请内存失败会直接崩溃重启。请用下面的 LOG()
+void logP(const char* fmtP, ...);
+// 只在电脑上做语法检查时检查格式：ESP8266 上 Flash 字符串用 %S（SEMI_PS），编译器会误报
+#if defined(ARDUINO)
+inline void logCheck(const char*, ...) {}
+#else
+inline void logCheck(const char*, ...) __attribute__((format(printf, 1, 2)));
+inline void logCheck(const char*, ...) {}
+#endif
+// 日志文件（LittleFS）：新的在 kLogFile，写满 48KB 后旧的挪到 kLogFileOld
+constexpr const char* kLogFile = "/log.txt";
+constexpr const char* kLogFileOld = "/log1.txt";
 size_t logCount();
 String logLine(size_t i);  // 0 = 最旧
 
@@ -45,3 +60,11 @@ enum class NetLed : uint8_t { Off, Slow, Fast, On };
 void setNetLed(NetLed m);
 
 }  // namespace app
+
+// 写一条日志：LOG("格式", 参数...)。格式必须是字符串常量，放在 Flash 里不占内存；
+// if (false) 那一句只是让编译器照常检查格式和参数是否匹配，不会生成代码
+#define LOG(fmt, ...)                                \
+  do {                                               \
+    if (false) ::app::logCheck(fmt, ##__VA_ARGS__);  \
+    ::app::logP(PSTR(fmt), ##__VA_ARGS__);           \
+  } while (0)

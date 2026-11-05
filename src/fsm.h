@@ -68,11 +68,12 @@ class Fsm {
   // 上电：就绪开关有耗材 -> 耗材就绪；只有进料口有耗材 -> 已退料（按黑色按钮吸料）；否则无耗材
   void begin(const Inputs& in, uint32_t now);
   void update(const Inputs& in, const Commands& cmd, uint32_t now);
-  // 外部强制停机（例如固件升级）
+  // 外部强制停机（例如固件升级）。reason 可以是 Flash 字符串（PSTR）
   void forceEmergency(const char* reason, uint32_t now);
 
   State state() const { return state_; }
   MotorCmd motor() const { return motor_; }
+  // 备注（在 ESP8266 上可能在 Flash 里：用 FPSTR()、%S 或 pgm_read_byte 读，见 pgm.h）
   const char* note() const { return note_; }
   bool feeding() const { return feeding_; }
   // 空闲：可以安全重启 / 手动点动
@@ -83,6 +84,7 @@ class Fsm {
   // 任何用户可见的变化都会让它加一，用于判断是否需要刷新 App
   uint32_t revision() const { return rev_; }
 
+  // 中文名在 ESP8266 上放在 Flash 里（SEMI_P），读取方法同 note()
   static const char* stateName(State s);  // 中文名（App 显示）
   static const char* stateKey(State s);   // 英文名（日志）
   static const char* motorName(MotorDir d);
@@ -123,6 +125,7 @@ class Fsm {
   bool outOfMaterial_ = false;
   bool refillTiming_ = false;  // 打印中耗材用尽后又插入新耗材，等插入延时
   uint32_t refillSince_ = 0;
+  bool bothHalls_ = false;  // EMPTY 和 FULL 同时有效（已提示过）
   bool tailDone_ = false;       // 耗材用尽后的料尾送料已结束
   bool tailReadySeen_ = false;  // 料尾送料期间就绪开关有料（之后松开 = 料尾已离开齿轮）
   uint32_t tailUsedMs_ = 0;     // 料尾送料已用的电机时间
