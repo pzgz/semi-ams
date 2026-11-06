@@ -3,9 +3,9 @@
 | 项目 | 内容 |
 |---|---|
 | 固件版本 | v1.2.3（升级、断电、崩溃重启后恢复"打印中"；不在打印中收到打印机退料时写日志；0x07FF8003 也当作拔出提示；进料口开关短暂接通写日志；红色按钮按住 60ms 才算，紧急停止时蓝灯双闪、插入耗材有提示。之前：MQTT 新增"响应进料""响应退料"两个开关；升级等重启前先写完日志；改用 2MB 分区，支持无线升级；打印中的补料改为汇总记录；中文字符串全部移进 Flash；修正内存不足导致的反复重启；崩溃记录） |
-| 文档日期 | 2026-11-06 |
+| 文档日期 | 2026-11-07 |
 | 主控 | ESP-12S（ESP8266EX；这台的模组实测闪存只有 2MB，固件按 2MB 分区，见 3.3 节第 7 条） |
-| 工程位置 | `~/Workspace/pzgz/semi-ams-firmware` |
+| 工程位置 | `~/Workspace/pzgz/semi-ams/firmware`（GitHub 仓库 `pzgz/semi-ams` 的 `firmware/` 目录） |
 | 原厂资料 | `~/SynologyDrive/3D打印/20260819_semi-ams/` |
 | 开发框架 | PlatformIO + Arduino（ESP8266 core 3.1.2） |
 | 当前状态 | 已在 Mac 上编译并上板运行；送料、退料、按键、料尾已实测；P2S 外置料盘自动送料、退料的完整流程已实测（v1.1.3） |
@@ -536,13 +536,13 @@ echo 'export PATH="$PATH:$HOME/.local/bin"' >> ~/.zprofile    # 然后重新打�
 
 **串口驱动：** 先执行一次 `ls /dev/cu.*`，插上 CH343P 串口工具后再执行一次，多出来的那一项就是串口。名字可能是 `cu.wchusbserial…`、`cu.usbserial…` 或 `cu.usbmodem…`。如果什么都没多出来，到沁恒（WCH）官网下载 CH34X/CH343 的 macOS 驱动。原厂教程截图里用的是 `/dev/cu.wchusbserial…`。
 
-**工程位置与版本管理：** 工程放在 `~/Workspace/pzgz/semi-ams-firmware`，不在 Synology Drive 的同步目录里，所以编译生成的 `.pio/`（几百 MB）不会被同步。建议在工程目录里执行一次 `git init` 做版本管理，`.gitignore` 已经排除了 `.pio/`、`.vscode/` 和 `.DS_Store`。原厂资料和固件备份仍然放在 `~/SynologyDrive/3D打印/20260819_semi-ams/`。
+**工程位置与版本管理：** 仓库是 `~/Workspace/pzgz/semi-ams`（GitHub `pzgz/semi-ams`），固件在其中的 `firmware/` 目录，同一个仓库里还有 `controller/`（主控，占位）和 `3d-files/`（打印件）。仓库不在 Synology Drive 的同步目录里，所以编译生成的 `.pio/`（几百 MB）不会被同步。根目录的 `.gitignore` 排除了 `.pio/`、`.vscode/`、`logs/`、`.DS_Store` 和 `bambu_log_*.jsonl`。PlatformIO 命令都在 `firmware/` 里执行，VS Code 也打开 `firmware/`。原厂资料和固件备份仍然放在 `~/SynologyDrive/3D打印/20260819_semi-ams/`。
 
 ### 5.2 先跑仿真测试（不需要开发板）
 
 ```bash
-cd semi-ams-firmware
-bash host_test/run.sh        # 全部通过时显示 "328 passed, 0 failed"
+cd semi-ams/firmware
+bash host_test/run.sh        # 全部通过时显示 "385 passed, 0 failed"
 bash host_test/run.sh -v     # 同时打印每一步的状态变化日志
 ```
 
@@ -556,7 +556,7 @@ pio run
 
 - 第一次编译会自动下载 ESP8266 工具链、Arduino core 3.1.2，以及点灯库（固定在提交 `c73abe1`）和 WiFiManager v2.0.17，需要几分钟。
 - 成功后会显示 RAM / Flash 的占用比例，固件文件在 `.pio/build/esp12s/firmware.bin`。
-- **这一步还没有在真实工具链上验证过。** 如果报错，把完整输出发回来修改。
+- 已在 Mac（Apple Silicon）上编译通过并上板运行。如果报错，把完整输出发回来修改。
 
 在 VS Code 里也可以操作：点左侧 PlatformIO 图标，在 Project Tasks → esp12s 下使用 Build、Upload、Monitor。
 

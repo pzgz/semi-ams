@@ -172,7 +172,7 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 </tr>
 <tr>
 <td>文档日期</td>
-<td>2026-11-06</td>
+<td>2026-11-07</td>
 </tr>
 <tr>
 <td>主控</td>
@@ -180,7 +180,7 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 </tr>
 <tr>
 <td>工程位置</td>
-<td><code>~/Workspace/pzgz/semi-ams-firmware</code></td>
+<td><code>~/Workspace/pzgz/semi-ams/firmware</code>（GitHub 仓库 <code>pzgz/semi-ams</code> 的 <code>firmware/</code> 目录）</td>
 </tr>
 <tr>
 <td>原厂资料</td>
@@ -1285,10 +1285,10 @@ ln -sf ~/.platformio/penv/bin/platformio ~/.local/bin/platformio
 echo 'export PATH=&quot;$PATH:$HOME/.local/bin&quot;' &gt;&gt; ~/.zprofile    # 然后重新打开终端
 </code></pre>
 <p><strong>串口驱动：</strong> 先执行一次 <code>ls /dev/cu.*</code>，插上 CH343P 串口工具后再执行一次，多出来的那一项就是串口。名字可能是 <code>cu.wchusbserial…</code>、<code>cu.usbserial…</code> 或 <code>cu.usbmodem…</code>。如果什么都没多出来，到沁恒（WCH）官网下载 CH34X/CH343 的 macOS 驱动。原厂教程截图里用的是 <code>/dev/cu.wchusbserial…</code>。</p>
-<p><strong>工程位置与版本管理：</strong> 工程放在 <code>~/Workspace/pzgz/semi-ams-firmware</code>，不在 Synology Drive 的同步目录里，所以编译生成的 <code>.pio/</code>（几百 MB）不会被同步。建议在工程目录里执行一次 <code>git init</code> 做版本管理，<code>.gitignore</code> 已经排除了 <code>.pio/</code>、<code>.vscode/</code> 和 <code>.DS_Store</code>。原厂资料和固件备份仍然放在 <code>~/SynologyDrive/3D打印/20260819_semi-ams/</code>。</p>
+<p><strong>工程位置与版本管理：</strong> 仓库是 <code>~/Workspace/pzgz/semi-ams</code>（GitHub <code>pzgz/semi-ams</code>），固件在其中的 <code>firmware/</code> 目录，同一个仓库里还有 <code>controller/</code>（主控，占位）和 <code>3d-files/</code>（打印件）。仓库不在 Synology Drive 的同步目录里，所以编译生成的 <code>.pio/</code>（几百 MB）不会被同步。根目录的 <code>.gitignore</code> 排除了 <code>.pio/</code>、<code>.vscode/</code>、<code>logs/</code>、<code>.DS_Store</code> 和 <code>bambu_log_*.jsonl</code>。PlatformIO 命令都在 <code>firmware/</code> 里执行，VS Code 也打开 <code>firmware/</code>。原厂资料和固件备份仍然放在 <code>~/SynologyDrive/3D打印/20260819_semi-ams/</code>。</p>
 <h3 id="52-先跑仿真测试不需要开发板">5.2 先跑仿真测试（不需要开发板）</h3>
-<pre><code class="language-bash">cd semi-ams-firmware
-bash host_test/run.sh        # 全部通过时显示 &quot;328 passed, 0 failed&quot;
+<pre><code class="language-bash">cd semi-ams/firmware
+bash host_test/run.sh        # 全部通过时显示 &quot;385 passed, 0 failed&quot;
 bash host_test/run.sh -v     # 同时打印每一步的状态变化日志
 </code></pre>
 <p>修改 <code>src/fsm.cpp</code>、<code>src/motor_logic.h</code> 或 <code>src/input.h</code> 后先跑一遍。新增行为时，在 <code>host_test/test_main.cpp</code> 里补一个场景。</p>
@@ -1298,7 +1298,7 @@ bash host_test/run.sh -v     # 同时打印每一步的状态变化日志
 <ul>
 <li>第一次编译会自动下载 ESP8266 工具链、Arduino core 3.1.2，以及点灯库（固定在提交 <code>c73abe1</code>）和 WiFiManager v2.0.17，需要几分钟。</li>
 <li>成功后会显示 RAM / Flash 的占用比例，固件文件在 <code>.pio/build/esp12s/firmware.bin</code>。</li>
-<li><strong>这一步还没有在真实工具链上验证过。</strong> 如果报错，把完整输出发回来修改。</li>
+<li>已在 Mac（Apple Silicon）上编译通过并上板运行。如果报错，把完整输出发回来修改。</li>
 </ul>
 <p>在 VS Code 里也可以操作：点左侧 PlatformIO 图标，在 Project Tasks → esp12s 下使用 Build、Upload、Monitor。</p>
 <h3 id="54-接线">5.4 接线</h3>
