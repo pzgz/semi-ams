@@ -3,7 +3,7 @@
 #pragma once
 
 #define FW_NAME    "SEMI-AMS"
-#define FW_VERSION "1.2.2"
+#define FW_VERSION "1.2.3"
 
 // ---------------- 引脚 ----------------
 #define PIN_HALL_EMPTY    12  // U11 EMPTY_CHECK（DRV5032FA 推挽），低电平 = 缓冲器空
@@ -32,6 +32,8 @@
 #define SWITCH_DEBOUNCE        5    // 微动开关：50ms
 #define BUTTON_PRESS_SAMPLES   2    // 按键按下：连续 2 次（20ms）确认
 #define BUTTON_RELEASE_SAMPLES 5    // 按键松开：连续 5 次（50ms）确认，按住时的短暂接触不良不算松开
+#define EMG_PRESS_SAMPLES      6    // 红色按钮按下：连续 6 次（60ms）才确认。GPIO15 上有干扰脉冲，20ms 会被误触发
+                                    // 进入紧急停止；人按一下一般在 100ms 以上
 #define TICK_LATE_MS          40    // 10ms 周期被推迟超过这个值就记一次（诊断用）
 #define LONG_PRESS_MS       3000    // 长按任意键松开后重启
 #define AUTO_RESTART_DAYS      7    // 运行满 7 天，空闲时自动重启

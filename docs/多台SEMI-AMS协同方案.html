@@ -249,7 +249,7 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 <p><strong>先做的实验</strong>：切一个两色的小模型，两种颜色都映射到外置料盘（看 Studio 是否允许），开着监听程序打印一次，记录换色时的完整消息。</p>
 <h2 id="5-顺带要做的改进单台也有用">5. 顺带要做的改进（单台也有用）</h2>
 <ol>
-<li><strong>中途接入</strong>：SEMI-AMS 重启或者打印开始后才连上打印机时，会错过 <code>project_file</code>。如果连上后看到 <code>gcode_state</code> 是 RUNNING / PREPARE、<code>mapping</code> 里有外置料盘、挤出机里有耗材，而本机有料，就进入"打印中"继续补料。多台时还要先通过做法一的匹配。</li>
+<li><strong>中途接入</strong>：SEMI-AMS 重启或者打印开始后才连上打印机时，会错过 <code>project_file</code>（v1.2.3 已经处理了其中一种：重启前已经在"打印中"的，靠 Flash 里的标记恢复；这里说的是还没进入打印中就错过了开始打印的情况）。如果连上后看到 <code>gcode_state</code> 是 RUNNING / PREPARE、<code>mapping</code> 里有外置料盘、挤出机里有耗材，而本机有料，就进入"打印中"继续补料。多台时还要先通过做法一的匹配。</li>
 <li><strong><code>0x07FFC006</code>（打印机在等外置料盘的耗材）</strong>：本机该送料却还没在送（例如错过了开始打印），就开始送料；已经在送就不处理。要防止和用户手动操作冲突，例如只在进料阶段（<code>stg_cur</code> 4）响应。</li>
 <li><strong>点灯 App 显示打印进度</strong>：任务名、进度百分比、剩余时间、当前层。</li>
 </ol>

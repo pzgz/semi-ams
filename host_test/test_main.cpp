@@ -657,6 +657,12 @@ int main(int argc, char** argv) {
   test_bambu_pull_out_prompt();
   test_fsm_both_halls_warning();
   test_fsm_feed_stats();
+  test_fsm_resume_printing();
+  test_fsm_printer_unload_not_printing();
+  test_fsm_emergency_insert_hint();
+  test_bambu_pull_out_8003();
+  test_emergency_button_60ms();
+  test_debouncer_blip();
   std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }

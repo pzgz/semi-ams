@@ -70,6 +70,13 @@ class Fsm {
   void update(const Inputs& in, const Commands& cmd, uint32_t now);
   // 外部强制停机（例如固件升级）。reason 可以是 Flash 字符串（PSTR）
   void forceEmergency(const char* reason, uint32_t now);
+  // 重启前在打印中（main.cpp 在 Flash 里留了标记）：begin() 之后调用。耗材就绪时回到打印中，
+  // 耗材本来就在打印机里，不做首次送料，只按缓冲器正常补料。返回 false = 没有恢复（就绪开关没有耗材）
+  bool resumePrinting(uint32_t now);
+  // 打印中，或打印中按了紧急停止（解除后回到打印中）。main.cpp 据此维护 Flash 里的标记
+  bool printingActive() const {
+    return state_ == State::Printing || (state_ == State::Emergency && resume_ == State::Printing);
+  }
 
   State state() const { return state_; }
   MotorCmd motor() const { return motor_; }
@@ -139,6 +146,10 @@ class Fsm {
   bool tailReadySeen_ = false;  // 料尾送料期间就绪开关有料（之后松开 = 料尾已离开齿轮）
   uint32_t tailUsedMs_ = 0;     // 料尾送料已用的电机时间
   uint32_t prevNow_ = 0;        // 上一次 update 的时间，用来累计电机运行时间
+
+  // Emergency：紧急停止中插入耗材时提示一次（不吸入，很容易以为是坏了）
+  bool emgPrevIn_ = false;
+  bool emgInHinted_ = false;
 
   // Unloading
   bool readySeen_ = false;  // 本次退料中就绪开关有过耗材；从没有过时（开关失效）一直退到离开进料口

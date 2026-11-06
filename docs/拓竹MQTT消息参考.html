@@ -143,7 +143,7 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 </tr>
 <tr>
 <td>采集日期</td>
-<td>2026-11-05，三段记录共 5954 条消息</td>
+<td>2026-11-05，三段记录共 5954 条消息；2026-11-06 补充了两台 SEMI-AMS（v1.2.x）日志里看到的错误码</td>
 </tr>
 <tr>
 <td>采集工具</td>
@@ -682,6 +682,21 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 <td>外置料盘退料的最后一步：打印机切断、回抽完以后报这个并一直等着，耗材离开挤出机后自动清除。SEMI-AMS 收到就马上退料</td>
 </tr>
 <tr>
+<td><code>0x07FF8003</code></td>
+<td><strong>请从挤出机拔出外置料盘的耗材</strong>（HMS 07FF-8003）</td>
+<td>2026-11-06：<code>0x07FFC003</code> 报出后一直没人拔，<strong>120 秒后</strong>变成这个，继续等。进料器重启后连上打印机时，读到的也可能已经是它。SEMI-AMS v1.2.3 起同样当作拔出提示（从 C003 变成 8003 不重复触发）</td>
+</tr>
+<tr>
+<td><code>0x03008003</code></td>
+<td>打印暂停（推测是 AI 检测到炒面，HMS 0300-8003，未核实）</td>
+<td>2026-11-06：打印中出现，同时 <code>gcode_state</code> RUNNING → PAUSE；约 7 分钟后停止打印（<code>stop</code>），随后报 <code>0x0300400C</code></td>
+</tr>
+<tr>
+<td><code>0x05008061</code></td>
+<td>未知</td>
+<td>2026-11-06：开始打印后、<code>stg_cur</code> 13 → 11 后约 8 秒出现，同时 <code>gcode_state</code> RUNNING → PAUSE；在 App 上点继续（<code>resume</code>）后恢复打印</td>
+</tr>
+<tr>
 <td><code>0x07FFC006</code></td>
 <td><strong>请把外置料盘的耗材送进挤出机</strong>（推测）</td>
 <td>进料阶段（<code>stg_cur</code> 4，<code>ams_status</code> 261）耗材迟迟不到时出现；在 App 点"继续"（<code>ams_control</code> resume）后清除</td>
@@ -989,13 +1004,14 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 <h3 id="44-在屏幕上退外置料盘19252219">4.4 在屏幕上退外置料盘（19:25、22:19）</h3>
 <p><code>ams_change_filament</code>（<code>ams_id 255, slot_id 255, target 255</code>）→ <code>ams_status</code> 258 → 259 → 260（约 50 秒，加热、切断、回抽）→ HMS <code>07FF-2000-0002-0004</code> + <code>print_error</code> <code>0x07FFC003</code>，等人拔料 → 耗材离开挤出机后：<code>hw_switch_state</code> 3 → 2，<code>snow</code> → 65535，<code>tray_now</code> → 255，<code>ams_status</code> → 0，错误自动清除。</p>
 <p>19:26 那次没有进料器帮忙，人先在 App 上清除了错误（<code>clean_print_error</code>），过了 1 分钟才把耗材拔出来。</p>
+<p>2026-11-06 在屏幕上退料（打印已结束，SEMI-AMS 因为升级重启，不在"打印中"，没有退料）：退料命令 → 73 秒后 <code>0x07FFC003</code> → 没人拔，120 秒后变成 <code>0x07FF8003</code> → 人按进料器的按钮退料，3 秒后打印机的耗材传感器变成"无"（<code>hw_switch_state</code> 3 → 2）。</p>
 <hr />
 <h2 id="5-semi-ams-用到的判断">5. SEMI-AMS 用到的判断</h2>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>打印机消息</th>
-<th>SEMI-AMS 动作（v1.1.4）</th>
+<th>SEMI-AMS 动作（v1.2.3）</th>
 </tr>
 </thead>
 <tbody>
@@ -1012,8 +1028,8 @@ figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figur
 <td>等打印机切断、回抽（最长 <code>mqtt_unload_wait_s</code>）</td>
 </tr>
 <tr>
-<td><code>print_error</code> <code>0x07FFC003</code></td>
-<td>马上退料</td>
+<td><code>print_error</code> <code>0x07FFC003</code>、<code>0x07FF8003</code>（H2 的另一个外置料盘 <code>0x07FEC003</code>、<code>0x07FE8003</code>）</td>
+<td>马上退料（只有"打印中"的那一台退，其它状态只记日志）</td>
 </tr>
 <tr>
 <td>挤出机耗材传感器变成"无"（<code>extruder.info</code> bit1）</td>

@@ -28,8 +28,11 @@ bool startsWithNoCase(const char* s, const char* prefix) {
 
 const char* hwText(int v) { return v < 0 ? SEMI_P("未知") : (v ? SEMI_P("有耗材") : SEMI_P("无耗材")); }
 
-// 外置料盘退料的最后一步：请从挤出机拔出外置料盘的耗材（07FE 是 H2 系列的另一个外置料盘）
-bool isPullOutPrompt(uint32_t e) { return e == 0x07FFC003UL || e == 0x07FEC003UL; }
+// 外置料盘退料的最后一步：请从挤出机拔出外置料盘的耗材（07FE 是 H2 系列的另一个外置料盘）。
+// 0x07FFC003 一直没人拔，约 2 分钟后打印机换成 0x07FF8003（HMS 07FF-8003，意思相同）
+bool isPullOutPrompt(uint32_t e) {
+  return e == 0x07FFC003UL || e == 0x07FEC003UL || e == 0x07FF8003UL || e == 0x07FE8003UL;
+}
 
 const char* errText(uint32_t e) {
   if (e == 0x0300400CUL) return SEMI_P("（打印任务已取消）");
@@ -168,11 +171,13 @@ void BambuMonitor::endMessage(uint32_t now) {
   }
   if (m_.hasErr && m_.err != err_) {
     if (m_.err) logf(SEMI_P("打印机错误码：0x%08lX" SEMI_PS), (unsigned long)m_.err, errText(m_.err));
+    const bool wasPrompt = isPullOutPrompt(err_);
     err_ = m_.err;
-    // 打印机已切断耗材、回抽完，正在等人把耗材从挤出机拔出来：现在退料不会和挤出机对拉
-    if (isPullOutPrompt(err_)) {
+    // 打印机已切断耗材、回抽完，正在等人把耗材从挤出机拔出来：现在退料不会和挤出机对拉。
+    // 从一种拔出提示换成另一种（C003 → 8003）不重复触发
+    if (isPullOutPrompt(err_) && !wasPrompt) {
       pending_ = false;
-      requestUnload(SEMI_P("打印机提示拔出外置料盘的耗材，开始退料"));
+      requestUnload(SEMI_P("打印机提示拔出外置料盘的耗材"));
     }
   }
   if (m_.hasGcode && strcmp(m_.gcode, gcode_) != 0) {
@@ -255,7 +260,7 @@ void BambuMonitor::tick(uint32_t now) {
   now_ = now;
   if (pending_ && now - pendingSince_ >= unloadWaitMs_) {
     pending_ = false;
-    requestUnload(SEMI_P("打印机退料后等待超时，开始退料"));
+    requestUnload(SEMI_P("打印机退料后等待超时"));
   }
 }
 

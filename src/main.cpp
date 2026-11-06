@@ -35,7 +35,7 @@ semi::MotorLogic gMotor;
 semi::Debouncer gIn(SWITCH_DEBOUNCE), gReady(SWITCH_DEBOUNCE);
 semi::Debouncer gLack(HALL_DEBOUNCE), gFull(HALL_DEBOUNCE);
 semi::ButtonTracker gBtnStart(BUTTON_PRESS_SAMPLES, BUTTON_RELEASE_SAMPLES, false, LONG_PRESS_MS);     // 松开触发
-semi::ButtonTracker gBtnEmergency(BUTTON_PRESS_SAMPLES, BUTTON_RELEASE_SAMPLES, true, LONG_PRESS_MS);  // 按下立即触发
+semi::ButtonTracker gBtnEmergency(EMG_PRESS_SAMPLES, BUTTON_RELEASE_SAMPLES, true, LONG_PRESS_MS);  // 按住 60ms 就触发（不等松开）
 
 // 远程命令（loop 里设置，tick 里消费；ESP8266 是协作式调度，不会同时执行）
 volatile bool gReqStartStop = false;
@@ -73,6 +73,11 @@ volatile uint32_t gTickLateCount = 0;   // 间隔 >= TICK_LATE_MS 的累计次�
 volatile uint32_t gUiRev = 0;
 uint32_t gLastFsmRev = 0;
 MotorDir gLastMotorDir = MotorDir::Stop;
+
+// 打印中标记：打印中（包括打印中按了紧急停止、固件升级）时 Flash 里有这个文件。升级、断电、崩溃重启后
+// 据此回到"打印中"，否则会停在"耗材就绪"，打印机退料时不响应，打印中也不补料
+constexpr const char* kPrintingFile = "/printing";
+int8_t gPrintingMark = -1;  // Flash 里现在有没有标记（-1 = 还没检查）
 
 // ---------- 日志环形缓冲 ----------
 struct LogEntry {
@@ -113,6 +118,9 @@ void updateLed(uint32_t now) {
   bool on;
   if (gBtnStart.longHeld(now) || gBtnEmergency.longHeld(now)) {
     on = (now / 50) & 1;  // 长按已到时间：急闪，松开即重启
+  } else if (gFsm.state() == semi::State::Emergency) {
+    const uint32_t ph = now % 1000;  // 紧急停止：双闪（亮 0.1 秒、灭 0.1 秒、亮 0.1 秒、灭 0.7 秒）
+    on = ph < 100 || (ph >= 200 && ph < 300);
   } else {
     switch (gNetLed) {
       case app::NetLed::On:   on = true; break;
@@ -166,6 +174,15 @@ void tick() {
     LOG("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(),
              gLack.value(), gFull.value());
   }
+  // 诊断：进料口没有耗材时，开关接通了但不到 50ms 就又断开（插入耗材没压到位、板子被顶开）。
+  // 不记的话日志里什么都没有，分不清"开关没被碰到"和"碰到了但没压稳"。5 秒内只记一条
+  if (const uint8_t b = gIn.takeBlip()) {
+    static uint32_t lastInBlipLog = 0;
+    if (!gIn.value() && (!lastInBlipLog || now - lastInBlipLog >= 5000)) {
+      lastInBlipLog = now | 1;
+      LOG("进料口开关短暂接通（约 %ums，要 %ums），未识别", b * TICK_MS, SWITCH_DEBOUNCE * TICK_MS);
+    }
+  }
 
   semi::Commands cmd;
   noInterrupts();
@@ -176,7 +193,7 @@ void tick() {
   auto re = gBtnEmergency.update(digitalRead(PIN_BTN_EMERGENCY) == HIGH, now);
   // 诊断：记录按键的每一次按下 / 松开
   static bool prevStart = false, prevEmg = false;
-  static uint32_t startPressAt = 0, startFallsAtPress = 0;
+  static uint32_t startPressAt = 0, startFallsAtPress = 0, emgPressAt = 0;
   if (gBtnStart.pressed() != prevStart) {
     prevStart = gBtnStart.pressed();
     if (prevStart) {
@@ -190,10 +207,28 @@ void tick() {
   }
   if (gBtnEmergency.pressed() != prevEmg) {
     prevEmg = gBtnEmergency.pressed();
-    LOG("红色按钮" SEMI_PS, prevEmg ? PSTR("按下") : PSTR("松开"));
+    // 按下要连续 60ms、松开要连续 50ms 才确认，换算回实际按下 / 松开的时刻
+    if (prevEmg) {
+      emgPressAt = now - EMG_PRESS_SAMPLES * TICK_MS;
+      LOG("红色按钮按下");
+    } else {
+      LOG("红色按钮松开（按住约 %lums）", (unsigned long)(now - BUTTON_RELEASE_SAMPLES * TICK_MS - emgPressAt));
+    }
   }
-  if (rs.blip) LOG("黑色按钮信号太短（不到 20ms），未识别");
-  if (re.blip) LOG("红色按钮信号太短（不到 20ms），未识别");
+  if (rs.blip) LOG("黑色按钮信号太短（约 %ums，要 %ums），未识别", rs.blipSamples * TICK_MS, BUTTON_PRESS_SAMPLES * TICK_MS);
+  if (re.blip) {
+    // 红色按钮的干扰脉冲可能很多：5 秒内只记一条
+    static uint32_t lastBlipLog = 0, blipSkipped = 0;
+    if (!lastBlipLog || now - lastBlipLog >= 5000) {
+      lastBlipLog = now | 1;
+      if (blipSkipped) LOG("红色按钮信号太短（约 %ums，要 %ums），未识别（之前 5 秒内还有 %lu 次）", re.blipSamples * TICK_MS,
+                           EMG_PRESS_SAMPLES * TICK_MS, (unsigned long)blipSkipped);
+      else LOG("红色按钮信号太短（约 %ums，要 %ums），未识别", re.blipSamples * TICK_MS, EMG_PRESS_SAMPLES * TICK_MS);
+      blipSkipped = 0;
+    } else {
+      blipSkipped++;
+    }
+  }
   if (rs.shortPress) {
     cmd.startStop = true;
     LOG("黑色按钮：开始/结束");
@@ -427,6 +462,22 @@ void pollSerial() {
     } else if (gSerialLine.length() < 120) {
       gSerialLine += c;
     }
+  }
+}
+
+// Flash 里的打印中标记跟着状态机走（只在 loop() 里写文件）。打印中进出一次写一次，次数很少
+void syncPrintingMark() {
+  const int8_t active = gFsm.printingActive() ? 1 : 0;
+  if (active == gPrintingMark) return;
+  gPrintingMark = active;  // 写失败（文件系统没挂载）也不再重试
+  if (active) {
+    File f = LittleFS.open(kPrintingFile, "w");
+    if (f) {
+      f.print('1');
+      f.close();
+    }
+  } else {
+    LittleFS.remove(kPrintingFile);
   }
 }
 
@@ -689,8 +740,11 @@ void setup() {
   LOG("传感器 进料口:%d 就绪:%d EMPTY:%d FULL:%d", gIn.value(), gReady.value(), gLack.value(),
            gFull.value());
 
-  // 上电不自动转电机：进料口有耗材时进入"已退料"，按黑色按钮吸料
+  // 上电不自动转电机：进料口有耗材时进入"已退料"，按黑色按钮吸料。
+  // 例外：重启前在打印中（升级、断电、崩溃），就绪开关有耗材就回到打印中，只按缓冲器正常补料
   gFsm.begin(currentInputs(), millis());
+  gPrintingMark = LittleFS.exists(kPrintingFile) ? 1 : 0;
+  if (gPrintingMark && !gFsm.resumePrinting(millis())) LOG("重启前在打印中，但就绪开关没有耗材，不恢复打印中");
   gTicker.attach_ms(TICK_MS, tick);
   flushLogs();
 
@@ -703,6 +757,7 @@ void loop() {
   net::loop();
   printer::loop();
   pollSerial();
+  syncPrintingMark();
   flushLogs();
   fileLogs(false);
 

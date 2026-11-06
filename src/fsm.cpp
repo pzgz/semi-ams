@@ -132,9 +132,20 @@ void Fsm::enter(State s, uint32_t now, const char* why) {
       break;
     case State::Emergency:
       feeding_ = false;
+      emgPrevIn_ = last_.in;
+      emgInHinted_ = false;
       setMotor(MotorDir::Stop, 0);
       break;
   }
+}
+
+bool Fsm::resumePrinting(uint32_t now) {
+  if (state_ != State::Ready) return false;
+  enter(State::Printing, now, SEMI_P("重启前在打印中"));
+  // 耗材本来就在打印机里：不做"首次送料"（最长 120 秒），缓冲器要补料时按正常补料处理（最长 30 秒）
+  feeding_ = false;
+  firstFeed_ = false;
+  return true;
 }
 
 void Fsm::emergency(const char* reason, uint32_t now) {
@@ -170,6 +181,11 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
   }
 
   const bool hasMaterial = in.in || in.ready;
+
+  // 打印机退料只对"打印中"的那一台有效（紧急停止中、已经在退料的另外处理）。不响应时写一条日志，
+  // 否则看日志会以为没收到
+  if (cmd.printerUnload && state_ != State::Printing && state_ != State::Emergency && state_ != State::Unloading)
+    logf(SEMI_P("本机不在打印中（" SEMI_PS "），不响应打印机退料"), stateName(state_));
 
   switch (state_) {
     case State::NoMaterial: {
@@ -393,6 +409,15 @@ void Fsm::update(const Inputs& in, const Commands& cmd, uint32_t now) {
       setMotor(MotorDir::Stop, 0);
       if (cmd.startStop) logf(SEMI_P("紧急停止中，请先按红色按钮解除"));
       if (cmd.printerStart || cmd.printerUnload) logf(SEMI_P("紧急停止中，忽略打印机的" SEMI_PS), cmd.printerStart ? SEMI_P("开始打印") : SEMI_P("退料"));
+      if (in.in && !emgPrevIn_ && !emgInHinted_) {
+        emgInHinted_ = true;
+        // 解除后回到无耗材 / 已退料的：进料口已经有耗材，会进入"已退料"，不会自己吸入，
+        // 要拔出再插入（按黑色按钮也会吸料，但吸完会直接开始打印、一直送到打印机）
+        const bool reinsert = resume_ == State::NoMaterial || resume_ == State::Retracted;
+        logf(SEMI_P("紧急停止中，插入的耗材不会吸入（按红色按钮解除" SEMI_PS "）"),
+             reinsert ? SEMI_P("后，拔出再重新插入") : "");
+      }
+      emgPrevIn_ = in.in;
       break;
     }
   }

@@ -539,3 +539,177 @@ static void test_fsm_feed_stats() {
   CHECK(logCount("最近 10 分钟补料 1 次") == 1);
 }
 
+
+static void test_fsm_resume_printing() {
+  title("重启前在打印中：耗材就绪时回到打印中，不做首次送料，补料按 30 秒超时；就绪开关没耗材不恢复");
+  // 缓冲器不满：恢复后马上按正常补料送到满，不写"送料用时"
+  Sim s(Inputs{true, true, true, false});
+  CHECK(s.st() == State::Ready);
+  CHECK(!s.fsm.printingActive());
+  g_log.clear();
+  CHECK(s.fsm.resumePrinting(s.now));
+  CHECK(s.st() == State::Printing);
+  CHECK(s.fsm.printingActive());
+  CHECK(logCount("重启前在打印中") == 1);
+  s.run(10);
+  CHECK(s.m() == MotorDir::Forward);
+  s.in.lack = false;
+  s.in.full = true;
+  s.run(20);
+  CHECK(s.m() == MotorDir::Stop);
+  CHECK(logCount("送料用时") == 0);
+  // 打印中按紧急停止：标记保留；解除后回到打印中
+  s.press(false, true);
+  CHECK(s.st() == State::Emergency && s.fsm.printingActive());
+  s.press(false, true);
+  CHECK(s.st() == State::Printing && s.fsm.printingActive());
+  // 打印机退料：进入退料中，标记清除
+  Commands c;
+  c.printerUnload = true;
+  s.run(10, c);
+  CHECK(s.st() == State::Unloading && !s.fsm.printingActive());
+
+  // 补料超时按 30 秒（不是首次送料的 120 秒）
+  Sim t(Inputs{true, true, true, false});
+  CHECK(t.fsm.resumePrinting(t.now));
+  t.run(29000);
+  CHECK(t.st() == State::Printing && t.m() == MotorDir::Forward);
+  t.run(2000);
+  CHECK(t.st() == State::Emergency);
+
+  // 缓冲器本来就满：不转电机
+  Sim f(Inputs{true, true, false, true});
+  CHECK(f.fsm.resumePrinting(f.now));
+  f.run(100);
+  CHECK(f.st() == State::Printing && f.m() == MotorDir::Stop);
+
+  // 只有进料口有耗材（已退料）或没有耗材：不恢复
+  Sim r(Inputs{true, false, false, false});
+  CHECK(r.st() == State::Retracted);
+  CHECK(!r.fsm.resumePrinting(r.now));
+  CHECK(r.st() == State::Retracted);
+  Sim n;
+  CHECK(!n.fsm.resumePrinting(n.now));
+  CHECK(n.st() == State::NoMaterial);
+}
+
+static void test_fsm_printer_unload_not_printing() {
+  title("不在打印中收到打印机退料：不动作，写一条日志；退料中再收到不重复记录");
+  Sim s(Inputs{true, true, false, false});
+  g_log.clear();
+  Commands c;
+  c.printerUnload = true;
+  s.run(10, c);
+  CHECK(s.st() == State::Ready && s.m() == MotorDir::Stop);
+  CHECK(logCount("本机不在打印中（耗材就绪），不响应打印机退料") == 1);
+  s.press(true);
+  s.press(true);
+  CHECK(s.st() == State::Unloading);
+  g_log.clear();
+  s.run(10, c);
+  CHECK(s.st() == State::Unloading);
+  CHECK(logCount("不在打印中") == 0);
+}
+
+static void test_fsm_emergency_insert_hint() {
+  title("紧急停止中插入耗材：不吸入，提示一次；解除后进入已退料，拔出再插入就正常吸入");
+  Sim s;
+  s.press(false, true);
+  CHECK(s.st() == State::Emergency);
+  g_log.clear();
+  s.in.in = true;
+  s.run(1000);
+  CHECK(s.st() == State::Emergency && s.m() == MotorDir::Stop);
+  CHECK(logCount("紧急停止中，插入的耗材不会吸入（按红色按钮解除后，拔出再重新插入）") == 1);
+  s.in.in = false;
+  s.run(100);
+  s.in.in = true;
+  s.run(100);
+  CHECK(logCount("插入的耗材不会吸入") == 1);  // 同一次紧急停止只提示一次
+  s.press(false, true);
+  s.run(10);
+  CHECK(s.st() == State::Retracted);
+  s.in.in = false;  // 拔出再插入：正常自动吸入
+  s.run(100);
+  CHECK(s.st() == State::NoMaterial);
+  s.in.in = true;
+  s.run(600);
+  CHECK(s.st() == State::Loading);
+  // 打印中紧急停止后换耗材：解除后回到打印中，提示里不要求按黑色按钮
+  Sim p(Inputs{true, true, false, true});
+  p.press(true);
+  CHECK(p.st() == State::Printing);
+  p.in.in = false;
+  p.run(100);
+  p.press(false, true);
+  g_log.clear();
+  p.in.in = true;
+  p.run(100);
+  CHECK(logCount("插入的耗材不会吸入（按红色按钮解除）") == 1);
+}
+
+static void test_bambu_pull_out_8003() {
+  title("拔出提示 0x07FF8003（0x07FFC003 没人拔约 2 分钟后变成它）：单独出现也退料；C003 之后变成 8003 不重复触发");
+  Printer p;
+  p.msg(status("\"gcode_state\":\"FINISH\",\"print_error\":0"));
+  p.msg(status("\"print_error\":134201347"));  // 0x07FFC003
+  CHECK(p.unload());
+  p.wait(120000);
+  p.msg(status("\"print_error\":134184963"));  // 0x07FF8003
+  CHECK(!p.unload());
+  CHECK(logCount("0x07FF8003（请从挤出机拔出外置料盘的耗材）") >= 1);
+  // 重启后连上打印机时提示已经是 8003
+  Printer q;
+  q.msg(status("\"gcode_state\":\"FINISH\",\"print_error\":134184963"));
+  CHECK(q.unload());
+  // 提示消失后再出现：再触发一次
+  q.msg(status("\"print_error\":0"));
+  q.msg(status("\"print_error\":134201347"));
+  CHECK(q.unload());
+}
+
+static void test_emergency_button_60ms() {
+  title("红色按钮：连续按住 60ms 才算；50ms 的干扰脉冲不触发，报告持续采样次数");
+  ButtonTracker r(6, 5, true, 3000);
+  r.reset(false);
+  uint32_t t = 0;
+  int shorts = 0, blips = 0, blipN = 0;
+  auto step = [&](bool p) {
+    auto x = r.update(p, t += 10);
+    shorts += x.shortPress;
+    if (x.blip) {
+      blips++;
+      blipN = x.blipSamples;
+    }
+  };
+  for (int i = 0; i < 5; i++) step(true);
+  for (int i = 0; i < 6; i++) step(false);
+  CHECK(shorts == 0 && blips == 1 && blipN == 5);
+  CHECK(!r.pressed());
+  for (int i = 0; i < 6; i++) step(true);
+  CHECK(shorts == 1 && r.pressed());
+  for (int i = 0; i < 6; i++) step(false);
+  CHECK(shorts == 1 && !r.pressed());
+  // 黑色按钮的 10ms 毛刺：blipSamples = 1
+  ButtonTracker b(2, 5, false, 3000);
+  b.reset(false);
+  auto x = b.update(true, t += 10);
+  x = b.update(false, t += 10);
+  CHECK(x.blip && x.blipSamples == 1);
+}
+
+static void test_debouncer_blip() {
+  title("消抖：变了又很快变回来时报告持续的采样次数（诊断进料口开关接触不良）");
+  Debouncer d(5);
+  d.reset(false);
+  for (int i = 0; i < 3; i++) CHECK(!d.update(true));
+  CHECK(d.takeBlip() == 0);  // 还没变回来
+  CHECK(!d.update(false));
+  CHECK(d.takeBlip() == 3);
+  CHECK(d.takeBlip() == 0);  // 读一次就清零
+  for (int i = 0; i < 4; i++) d.update(true);
+  CHECK(d.update(true));     // 第 5 次确认
+  CHECK(d.value());
+  CHECK(!d.update(true));
+  CHECK(d.takeBlip() == 0);  // 正常变化不算
+}

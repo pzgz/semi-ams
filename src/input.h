@@ -12,6 +12,7 @@ class Debouncer {
   // 返回 true 表示稳定状态发生了变化
   bool update(bool raw) {
     if (raw == stable_) {
+      if (count_) blip_ = count_;  // 变了几次又变回来，没达到确认次数
       count_ = 0;
       return false;
     }
@@ -23,11 +24,18 @@ class Debouncer {
     return false;
   }
   bool value() const { return stable_; }
+  // 最近一次"变了又很快变回来"持续的采样次数（诊断开关接触不良），读一次就清零；0 = 没有
+  uint8_t takeBlip() {
+    const uint8_t b = blip_;
+    blip_ = 0;
+    return b;
+  }
 
  private:
   uint8_t samples_;
   bool stable_ = false;
   uint8_t count_ = 0;
+  uint8_t blip_ = 0;
 };
 
 // 按键：短按 / 长按识别
@@ -45,6 +53,7 @@ class ButtonTracker {
     bool shortPress = false;
     bool longPress = false;
     bool blip = false;
+    uint8_t blipSamples = 0;  // blip 时信号为按下的采样次数（× 采样周期 ≈ 持续时间）
   };
 
   ButtonTracker(uint8_t pressSamples, uint8_t releaseSamples, bool actOnPress, uint32_t longMs)
@@ -67,7 +76,10 @@ class ButtonTracker {
           if (actOnPress_ && !ignoreUntilRelease_) r.shortPress = true;
         }
       } else {
-        if (count_ > 0) r.blip = true;
+        if (count_ > 0) {
+          r.blip = true;
+          r.blipSamples = count_;
+        }
         count_ = 0;
       }
     } else {
@@ -90,6 +102,7 @@ class ButtonTracker {
   }
 
   bool pressed() const { return pressed_; }
+  uint8_t pressSamples() const { return pressSamples_; }
   // 正在按住且已超过长按阈值（用来让 LED 提示"松开即重启"）
   bool longHeld(uint32_t now) const {
     return pressed_ && !ignoreUntilRelease_ && (now - pressAt_ >= longMs_);
