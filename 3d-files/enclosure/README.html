@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEMI-AMS 外壳改版：整面 PCB 保护壳 + 加厚盖板</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#646a73; --border:#e3e5e9;
+  --accent:#1a5fd6; --accent-weak:#e9f0fd; --code-bg:#f1f3f5; --code-text:#24292f;
+  --row:#fafbfc; --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+    --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+    --row:#1e2128; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+  --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+  --row:#1e2128; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px 14px 6px;box-shadow:var(--shadow);font-size:13.5px}
+.toc summary{list-style:none;cursor:pointer;font-weight:600;padding:2px 12px 8px;color:var(--text)}
+.toc summary::-webkit-details-marker{display:none}
+.toc ul{list-style:none;margin:0;padding-left:12px}
+.toc-list>ul{padding-left:4px}
+.toc-list>ul>li{margin-top:6px}
+.toc-list>ul>li>a{color:var(--text);font-weight:600}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:3px 8px;border-radius:6px;color:var(--muted);text-decoration:none;line-height:1.45}
+.toc a:hover{background:var(--accent-weak);color:var(--text)}
+.toc a.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+main{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:36px 44px 48px;box-shadow:var(--shadow);min-width:0}
+h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
+h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:30px 0 10px}
+h2+h3{margin-top:16px}
+h4{font-size:15px;margin:22px 0 8px}
+h3+h4{margin-top:12px}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+hr{display:none}
+strong{font-weight:650}
+ul,ol{padding-left:1.4em}
+li{margin:3px 0}
+code{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);color:var(--code-text);
+  padding:.12em .4em;border-radius:5px;word-break:break-word}
+pre{position:relative;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.55}
+pre code{background:none;padding:0;font-size:13px;word-break:normal;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  font-size:12px;border-radius:6px;padding:2px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus{opacity:1}
+.table-wrap{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--row);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even) td{background:var(--row)}
+td code{white-space:nowrap}
+figure.diagram{margin:18px 0 22px;padding:16px;background:#fff;color:#1f2329;color-scheme:light;border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+figure.diagram svg{max-width:100%;height:auto}
+figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figure.diagram svg foreignObject p{color:#1f2329}
+.theme-toggle{position:fixed;right:16px;bottom:16px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width: 1000px){
+  .layout{grid-template-columns:1fr;padding:16px 16px 72px;gap:14px}
+  .toc{position:static;max-height:none}
+  main{padding:22px 18px 32px;border-radius:12px}
+  h1{font-size:23px}
+  h2{font-size:19px}
+  figure.diagram{padding:10px}
+  figure.diagram svg{min-width:560px}
+}
+@media print{
+  body{background:#fff}
+  .toc,.theme-toggle,.copy{display:none}
+  .layout{display:block;padding:0}
+  main{border:none;box-shadow:none;padding:0}
+  h2{break-after:avoid}
+  pre,figure,.table-wrap{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <details class="toc" open>
+    <summary>目录</summary>
+    <div class="toc-list">
+<ul>
+<li><a href="#pcb-保护壳整面版">PCB 保护壳（整面版）</a></li>
+<li><a href="#盖板加厚版">盖板（加厚版）</a></li>
+<li><a href="#剖面">剖面</a></li>
+<li><a href="#打印">打印</a></li>
+<li><a href="#重新生成">重新生成</a></li>
+<li><a href="#坐标">坐标</a></li>
+</ul>
+</div>
+
+  </details>
+  <main>
+<h1 id="semi-ams-外壳改版整面-pcb-保护壳-加厚盖板">SEMI-AMS 外壳改版：整面 PCB 保护壳 + 加厚盖板</h1>
+<p>原厂的 PCB 保护壳只罩住 PCB，旁边的电机和走线露在外面。另一面的盖板只有 3 mm 厚，缓冲器会冒出来一点。这两件都改了：</p>
+<ul>
+<li><strong>PCB 保护壳（整面版）</strong> <code>semi-ams-pcb-shell_full.stl</code>：外轮廓和主体装 PCB 的那一面一样大，把整面罩住。</li>
+<li><strong>盖板（加厚版）</strong> <code>semi-ams-cover_thick.stl</code>：往外侧加厚 3 mm（3 mm → 6 mm），螺丝孔做成沉孔，沉孔朝外边开口。</li>
+<li><strong>Bambu Studio 工程</strong> <code>semi-ams-enclosure.3mf</code>：两件排在一块板上，带打印参数，打开就能切片（见"打印"）。</li>
+</ul>
+<p>两件都是在原厂 STL 的基础上改的，原来的结构尽量不动。</p>
+<p><img alt="装好后（左：PCB 那一面；右：盖板那一面）" src="images/assembly.png" /></p>
+<h2 id="pcb-保护壳整面版">PCB 保护壳（整面版）</h2>
+<p><img alt="左：原壳只罩住 PCB；中：新壳罩住整面；右：新壳里面" src="images/shell.png" /></p>
+<ul>
+<li>原壳整块保留，在它外面往外扩。顶板、刻字、两个按钮孔、两个 LED 小窗，以及贴着主体边缘那两面墙上的开口都原样保留。开口包括电源线（P）出口、烧录口，以及给电感、电容让位的口。</li>
+<li>原壳靠电机一侧和靠下一侧的两面墙去掉了，PCB、电机和走线现在在同一个腔里。</li>
+<li>外表面高度不变，还是 PCB 上方 9 mm。新扩出来的部分，口沿直接压在主体表面上，比压 PCB 的口沿低 1.6 mm（板厚）。</li>
+<li>一共六颗 M3 螺丝，做法都和原壳一样：边上开缺口，缺口底下是压片。</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>孔（主体坐标）</th>
+<th>压在哪</th>
+<th>压片厚</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>① (28.5, 79)、② (53.36, 79)、③ (53.36, 34.26)：原 PCB 的三个孔</td>
+<td>PCB 上</td>
+<td>1 mm（原壳的）</td>
+</tr>
+<tr>
+<td>④ (3.5, 79)、⑤ (3.5, 14.84)、⑥ (32.68, 3.5)：主体上另外三个 Ø4.1 孔，装 M3 热熔螺母</td>
+<td>主体表面</td>
+<td>2.6 mm</td>
+</tr>
+</tbody>
+</table></div>
+<p>六个压片的顶面一样高，螺丝夹住的厚度都是 2.6 mm（PCB 上是压片 1 + 板 1.6），所以六颗用同一种长度。按热熔螺母的长度选 M3×6 或 M3×8。
+- ① 原来在壳的左上角，左边现在是新壳，补了一道墙封住。③ 的下边也一样补了墙。缺口只朝主体外边开。
+- 原壳上的 "M"（电机线出口）现在在壳里面了，刻字已填平。六个螺丝孔都是 Ø3.2（原壳是 3.0）。
+- 电机比主体表面凸出约 3.5 mm，壳内高 9.6 mm，还剩约 6 mm。</p>
+<h2 id="盖板加厚版">盖板（加厚版）</h2>
+<p><img alt="左：原盖板；中：加厚后的外面；右：加厚后的里面（不变）" src="images/cover.png" /></p>
+<ul>
+<li>只往外面加：朝内那一面的孔、凸台、导管槽和斜面一点没动，装回主体的位置不变。窗口照样贯通，只是深了 3 mm，缓冲器不会再冒出外表面。</li>
+<li>5 个螺丝孔做成 Ø6.2、深 3.5 的沉孔，外表面是平的，沉孔朝最近的外边开口。这几个孔离外边都只有 3.5 mm（盖板的圆角就是以孔心为圆心画的），做成封闭沉孔外侧只剩 0.4 mm。字正着看时左上角那个孔离大窗口只有 0.07 mm，沉孔就直接和窗口连通了。</li>
+<li>内六角圆柱头（头 Ø5.5，高 3）和圆头、盘头螺丝都能沉到表面以下。头下面还剩 2.5 mm 料（原来是 3 mm），原来的螺丝可以继续用。</li>
+<li>外表面的 SEMI-AMS 刻字（深 1 mm）挪到了新的外表面上，原来的刻字槽填平了。</li>
+</ul>
+<h2 id="剖面">剖面</h2>
+<p><img alt="上：PCB 壳过 ②①④；下：盖板过下面两个角孔" src="images/sections.png" /></p>
+<h2 id="打印">打印</h2>
+<p>直接打开 <code>semi-ams-enclosure.3mf</code>：一块板，两件都是外表面朝下，和原厂件一样不用支撑。打开就是 P2S + PETG HF + 下面这套设置，不会提示"不是来自 Bambu Lab"。STL 也是同样的打印姿态。</p>
+<p><img alt="打印板" src="images/plate.png" /></p>
+<p><strong>工程预设</strong>（和卡座支架共用 <code>../bracket/bambu_project_settings.json</code>，都是 Bambu Studio 自带的系统预设）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>预设</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>打印机</td>
+<td>Bambu Lab P2S 0.4 nozzle</td>
+</tr>
+<tr>
+<td>耗材</td>
+<td>Bambu PETG HF @BBL P2S 0.4 nozzle。想用 PLA 就把耗材 1 换成对应预设，零件上的设置不受影响</td>
+</tr>
+<tr>
+<td>工艺</td>
+<td>0.20mm Standard @BBL P2S。压片顶面 8、压 PCB 的口沿 9、压主体的口沿 10.6 都是 0.2 的整数倍</td>
+</tr>
+<tr>
+<td>热床</td>
+<td>纹理 PEI 板。两件的外表面都是贴床那面，会带纹理；想要光面就换光面板，PETG 要先涂胶水</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>零件上的单独设置</strong>（在对象列表里零件下面能看到，换工艺预设也不会丢；两件一样）：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>设置</th>
+<th>值</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>墙生成器</td>
+<td>Arachne</td>
+<td>PCB 壳的墙只有 0.8~1.2 mm，用变线宽两圈填满不留缝；经典模式在 1 mm 的墙里会留一条缝</td>
+</tr>
+<tr>
+<td>墙层数</td>
+<td>3</td>
+<td>盖板的框和六个压片三圈基本就实心了；PCB 壳的薄墙实际只放得下两圈</td>
+</tr>
+<tr>
+<td>底层</td>
+<td>5 层（1 mm）</td>
+<td>PCB 壳的顶板正好 1 mm，整块实心，刻字、按钮孔、LED 窗都在这 5 层里；盖板最外 1 mm 也是实心</td>
+</tr>
+<tr>
+<td>顶层</td>
+<td>5 层</td>
+<td>压片顶面（螺丝头压的面）和口沿都是实心</td>
+</tr>
+<tr>
+<td>稀疏填充</td>
+<td>25% 螺旋体</td>
+<td>只有盖板的框和压片厚到会用上填充，螺丝拧紧不会塌</td>
+</tr>
+<tr>
+<td>接缝</td>
+<td>后方</td>
+<td>两件都是外表面朝下，接缝只在侧面，统一放到后面</td>
+</tr>
+<tr>
+<td>裙边</td>
+<td>关</td>
+<td>外表面就是贴床那一面，边缘要干净。整面贴床，PETG 不会翘</td>
+</tr>
+<tr>
+<td>支撑</td>
+<td>关</td>
+<td>朝下的面只有 PCB 壳缺口里压片的底面、盖板沉孔的顶面，都是 6 mm 左右的短桥接，两三面有墙托着</td>
+</tr>
+</tbody>
+</table></div>
+<p>3MF 由 <code>enclosure.py</code> 生成，重新生成会覆盖。在 Bambu Studio 里改的设置要同步改到 <code>enclosure.py</code> 的 <code>PRINT_SETTINGS</code>，不然下次生成就没了。</p>
+<h2 id="重新生成">重新生成</h2>
+<pre><code>python3 enclosure.py        # 读原厂 STL，输出两个新 STL 和 3MF 工程
+python3 check.py            # 装到主体上检查干涉、对位，以及盖板朝内一面有没有变
+python3 render_images.py    # 重新出 images/ 里的图（用 ../bracket/render.py）
+</code></pre>
+<ul>
+<li>原厂文件默认从 <code>~/SynologyDrive/3D打印/20260819_semi-ams/</code> 读，用到 <code>SEMI-AMS-main-body.stl</code>、<code>SEMI-AMS-PCB保护壳.stl</code> 和 <code>SEMI-AMS-cover.stl</code>。别的目录可以作为第一个参数传进去。</li>
+<li>依赖：<code>pip3 install trimesh manifold3d shapely numpy matplotlib pillow</code>。写 3MF 用的是 <code>../bracket/</code> 里的 <code>bambu3mf.py</code>、<code>render.py</code> 和 <code>bambu_project_settings.json</code>。</li>
+<li>PCB 壳是按高度分层在 2D 里合成、再逐层拉伸叠起来的（原壳本身就是纯分层的结构），所以导出的网格是干净的封闭实体，切片软件不会报"已修复错误"。</li>
+<li>参数都在 <code>enclosure.py</code> 开头的 <code>P</code> 里：PCB 板厚（默认 1.6，实测不同就改）、新侧壁厚、缺口大小、盖板加厚量、沉孔直径和深度。</li>
+</ul>
+<p><code>check.py</code> 的结果：</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PCB 壳和主体、PCB（1.6 板）、电机（Ø24.4 圆柱）的干涉</td>
+<td>都是 0</td>
+</tr>
+<tr>
+<td>六个压片的位置</td>
+<td>①②③ 压片 z 8~9（贴 PCB），④⑤⑥ 压片 z 8~10.6（贴主体）</td>
+</tr>
+<tr>
+<td>盖板从原外表面往里 1.5 mm 以后的截面，和原件比</td>
+<td>完全一样</td>
+</tr>
+<tr>
+<td>盖板装到主体上的干涉</td>
+<td>和原件一样（0）</td>
+</tr>
+<tr>
+<td>两个 STL 的网格（按位置合并顶点后）</td>
+<td>封闭、没有非流形边、各是一个实体</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="坐标">坐标</h2>
+<p>都沿用原厂 STL 的坐标：</p>
+<ul>
+<li><strong>主体</strong>：装 PCB 的那一面是 z=0，往外是 −z；盖板那一面是 z=22.5。</li>
+<li><strong>原 PCB 壳</strong>：外表面 z=0，压 PCB 的口沿 z=9；XY 平移 (25.55, 30.75) 就和主体坐标重合（三个孔正好对上主体的孔）。</li>
+<li><strong>新 PCB 壳</strong>：外表面 z=0，压 PCB 的口沿 z=9，压主体的口沿 z=10.6。装上去就是整体平移 z −10.6。</li>
+<li><strong>盖板</strong>：外表面 z=0（加厚前），朝内的面 z=3。装到主体上是 y→82.5−y、z→25.5−z。加厚版的外表面在 z=0，原来的部分整体往上移了 3 mm。</li>
+</ul>
+  </main>
+</div>
+<button class="theme-toggle" type="button" aria-label="切换深色/浅色">深色 / 浅色</button>
+<script>
+(function(){
+  var toc=document.querySelector('.toc');
+  if(window.matchMedia('(max-width: 1000px)').matches) toc.removeAttribute('open');
+
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='复制';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1200)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,function(){})}
+    });
+    pre.appendChild(b);
+  });
+
+  var root=document.documentElement, btn=document.querySelector('.theme-toggle');
+  try{var saved=localStorage.getItem('semi-doc-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('semi-doc-theme',next)}catch(e){}
+  });
+
+  var links={}; document.querySelectorAll('.toc a').forEach(function(a){links[decodeURIComponent(a.getAttribute('href').slice(1))]=a});
+  var heads=[].slice.call(document.querySelectorAll('main h2[id], main h3[id]'));
+  if('IntersectionObserver' in window){
+    var current=null;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ current=e.target.id; } });
+      Object.keys(links).forEach(function(k){links[k].classList.toggle('active',k===current)});
+    },{rootMargin:'0px 0px -70% 0px'});
+    heads.forEach(function(h){io.observe(h)});
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D 打印件</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#646a73; --border:#e3e5e9;
+  --accent:#1a5fd6; --accent-weak:#e9f0fd; --code-bg:#f1f3f5; --code-text:#24292f;
+  --row:#fafbfc; --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+    --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+    --row:#1e2128; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+  --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+  --row:#1e2128; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px 14px 6px;box-shadow:var(--shadow);font-size:13.5px}
+.toc summary{list-style:none;cursor:pointer;font-weight:600;padding:2px 12px 8px;color:var(--text)}
+.toc summary::-webkit-details-marker{display:none}
+.toc ul{list-style:none;margin:0;padding-left:12px}
+.toc-list>ul{padding-left:4px}
+.toc-list>ul>li{margin-top:6px}
+.toc-list>ul>li>a{color:var(--text);font-weight:600}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:3px 8px;border-radius:6px;color:var(--muted);text-decoration:none;line-height:1.45}
+.toc a:hover{background:var(--accent-weak);color:var(--text)}
+.toc a.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+main{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:36px 44px 48px;box-shadow:var(--shadow);min-width:0}
+h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
+h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:30px 0 10px}
+h2+h3{margin-top:16px}
+h4{font-size:15px;margin:22px 0 8px}
+h3+h4{margin-top:12px}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+hr{display:none}
+strong{font-weight:650}
+ul,ol{padding-left:1.4em}
+li{margin:3px 0}
+code{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);color:var(--code-text);
+  padding:.12em .4em;border-radius:5px;word-break:break-word}
+pre{position:relative;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.55}
+pre code{background:none;padding:0;font-size:13px;word-break:normal;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  font-size:12px;border-radius:6px;padding:2px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus{opacity:1}
+.table-wrap{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--row);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even) td{background:var(--row)}
+td code{white-space:nowrap}
+figure.diagram{margin:18px 0 22px;padding:16px;background:#fff;color:#1f2329;color-scheme:light;border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+figure.diagram svg{max-width:100%;height:auto}
+figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figure.diagram svg foreignObject p{color:#1f2329}
+.theme-toggle{position:fixed;right:16px;bottom:16px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width: 1000px){
+  .layout{grid-template-columns:1fr;padding:16px 16px 72px;gap:14px}
+  .toc{position:static;max-height:none}
+  main{padding:22px 18px 32px;border-radius:12px}
+  h1{font-size:23px}
+  h2{font-size:19px}
+  figure.diagram{padding:10px}
+  figure.diagram svg{min-width:560px}
+}
+@media print{
+  body{background:#fff}
+  .toc,.theme-toggle,.copy{display:none}
+  .layout{display:block;padding:0}
+  main{border:none;box-shadow:none;padding:0}
+  h2{break-after:avoid}
+  pre,figure,.table-wrap{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <details class="toc" open>
+    <summary>目录</summary>
+    <div class="toc-list">
+<ul>
+<li><a href="#现有零件">现有零件</a></li>
+<li><a href="#建议的放法">建议的放法</a></li>
+</ul>
+</div>
+
+  </details>
+  <main>
+<h1 id="3d-打印件">3D 打印件</h1>
+<p>自己设计或修改的打印件，例如支架、外壳调整。</p>
+<p>原厂的打印件在本机 Synology Drive 的 <code>3D打印/20260819_semi-ams/</code>（<code>SEMI-AMS-main-body.stl</code>、<code>SEMI-AMS直.3mf</code>、<code>SEMI-AMS直_stls/</code>、<code>ams架.stl</code> 等），只作参考；要改的话复制过来再改。</p>
+<h2 id="现有零件">现有零件</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>文件夹</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="bracket/"><code>bracket/</code></a></td>
+<td>卡座支架：代替原厂磁吸板，"[" 形卡住主体（六边形凸起插 B 孔 + 弹性下臂 + 磁铁），背后两种挂法：一体式直接挂 Sanja 3D P2S 增高架；或 Multiconnect 卡座 + 适配器（Sanja 增高架用这里的适配器，Multiboard / Skadis / openGrid / 墙面用现成的 Multiconnect 连接件）</td>
+</tr>
+<tr>
+<td><a href="enclosure/"><code>enclosure/</code></a></td>
+<td>外壳改版：PCB 保护壳扩大到罩住主体整面（原 PCB 三颗螺丝照旧压 PCB，主体上另外三个孔加热熔螺母压壳）；另一面的盖板外侧加厚到 6 mm，螺丝孔做朝外边开口的沉孔；附带 P2S 打印参数的 Bambu Studio 工程</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="建议的放法">建议的放法</h2>
+<p>每个零件一个文件夹：</p>
+<pre><code>3d-files/
+  &lt;零件名&gt;/
+    README.md    用途、改了什么、打印参数（材料、层高、支撑、朝向）
+    源文件       能改尺寸的那种，例如 STEP 或建模软件的工程文件
+    *.3mf        切片工程（可选）
+    *.stl        导出的模型
+</code></pre>
+<ul>
+<li>尽量连源文件一起放，只有 STL 以后不好改。</li>
+<li>文件很大或很多时，可以考虑 Git LFS（<code>git lfs track "*.stl" "*.3mf" "*.step"</code>），目前没有启用。</li>
+</ul>
+  </main>
+</div>
+<button class="theme-toggle" type="button" aria-label="切换深色/浅色">深色 / 浅色</button>
+<script>
+(function(){
+  var toc=document.querySelector('.toc');
+  if(window.matchMedia('(max-width: 1000px)').matches) toc.removeAttribute('open');
+
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='复制';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1200)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,function(){})}
+    });
+    pre.appendChild(b);
+  });
+
+  var root=document.documentElement, btn=document.querySelector('.theme-toggle');
+  try{var saved=localStorage.getItem('semi-doc-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('semi-doc-theme',next)}catch(e){}
+  });
+
+  var links={}; document.querySelectorAll('.toc a').forEach(function(a){links[decodeURIComponent(a.getAttribute('href').slice(1))]=a});
+  var heads=[].slice.call(document.querySelectorAll('main h2[id], main h3[id]'));
+  if('IntersectionObserver' in window){
+    var current=null;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ current=e.target.id; } });
+      Object.keys(links).forEach(function(k){links[k].classList.toggle('active',k===current)});
+    },{rootMargin:'0px 0px -70% 0px'});
+    heads.forEach(function(h){io.observe(h)});
+  }
+})();
+</script>
+</body>
+</html>

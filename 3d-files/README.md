@@ -9,6 +9,7 @@
 | 文件夹 | 内容 |
 |---|---|
 | [`bracket/`](bracket/) | 卡座支架：代替原厂磁吸板，"[" 形卡住主体（六边形凸起插 B 孔 + 弹性下臂 + 磁铁），背后两种挂法：一体式直接挂 Sanja 3D P2S 增高架；或 Multiconnect 卡座 + 适配器（Sanja 增高架用这里的适配器，Multiboard / Skadis / openGrid / 墙面用现成的 Multiconnect 连接件） |
+| [`enclosure/`](enclosure/) | 外壳改版：PCB 保护壳扩大到罩住主体整面（原 PCB 三颗螺丝照旧压 PCB，主体上另外三个孔加热熔螺母压壳）；另一面的盖板外侧加厚到 6 mm，螺丝孔做朝外边开口的沉孔；附带 P2S 打印参数的 Bambu Studio 工程 |
 
 ## 建议的放法
 
