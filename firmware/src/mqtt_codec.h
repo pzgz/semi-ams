@@ -73,6 +73,37 @@ inline size_t buildConnect(uint8_t* buf, size_t cap, const char* clientId, const
   return detail::finish(buf, CONNECT << 4, body);
 }
 
+// 带遗嘱（Last Will）的 CONNECT：服务器发现客户端异常断开时，代它发布 willMsg 到 willTopic。
+// 局域网 MQTT 用它发布 online/offline，掉电时服务器会自动把 availability 改成 offline
+inline size_t buildConnectWill(uint8_t* buf, size_t cap, const char* clientId, const char* user, const char* pass,
+                               uint16_t keepAliveS, const char* willTopic, const char* willMsg, bool willRetain) {
+  const size_t lc = strlen(clientId), lu = user ? strlen(user) : 0, lp = pass ? strlen(pass) : 0;
+  const size_t lt = willTopic ? strlen(willTopic) : 0, lm = willMsg ? strlen(willMsg) : 0;
+  size_t body = 10 + 2 + lc + (user ? 2 + lu : 0) + (pass ? 2 + lp : 0);
+  if (lt) body += 2 + lt + 2 + lm;
+  if (body + 5 > cap) return 0;
+  uint8_t* p = buf + 5;
+  const uint8_t proto[] = {0, 4, 'M', 'Q', 'T', 'T', 4};
+  memcpy(p, proto, sizeof(proto));
+  p += sizeof(proto);
+  uint8_t flags = 0x02;  // clean session
+  if (user) flags |= 0x80;
+  if (pass) flags |= 0x40;
+  if (lt) flags |= 0x04;  // 遗嘱标志（QoS 0）
+  if (lt && willRetain) flags |= 0x20;
+  *p++ = flags;
+  *p++ = (uint8_t)(keepAliveS >> 8);
+  *p++ = (uint8_t)keepAliveS;
+  p += detail::putStr(p, clientId, lc);
+  if (lt) {
+    p += detail::putStr(p, willTopic, lt);
+    p += detail::putStr(p, willMsg, lm);
+  }
+  if (user) p += detail::putStr(p, user, lu);
+  if (pass) p += detail::putStr(p, pass, lp);
+  return detail::finish(buf, CONNECT << 4, body);
+}
+
 inline size_t buildSubscribe(uint8_t* buf, size_t cap, uint16_t packetId, const char* topic, uint8_t qos) {
   const size_t lt = strlen(topic);
   const size_t body = 2 + 2 + lt + 1;

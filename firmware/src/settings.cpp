@@ -94,9 +94,10 @@ static bool alnum(const char* v, size_t minLen, size_t maxLen) {
   return true;
 }
 
-bool settingsSetMqttIp(const char* v) {
+// 解析 IPv4 并规范化写回 out；空字符串表示清空
+static bool setIpv4(const char* v, char* out, size_t cap) {
   if (!v || !*v) {
-    gSettings.mqttIp[0] = 0;
+    out[0] = 0;
     return true;
   }
   int a, b, c, d;
@@ -105,9 +106,11 @@ bool settingsSetMqttIp(const char* v) {
   if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) return false;
   char buf[24];
   snprintf(buf, sizeof(buf), "%d.%d.%d.%d", a, b, c, d);
-  strlcpy(gSettings.mqttIp, buf, sizeof(gSettings.mqttIp));
+  strlcpy(out, buf, cap);
   return true;
 }
+
+bool settingsSetMqttIp(const char* v) { return setIpv4(v, gSettings.mqttIp, sizeof(gSettings.mqttIp)); }
 
 bool settingsSetMqttSn(const char* v) {
   if (v && *v && !alnum(v, 8, 20)) return false;
@@ -131,6 +134,40 @@ bool settingsSetMqttUnloadWait(long s) {
 bool settingsMqttConfigured() {
   return gSettings.mqttIp[0] && gSettings.mqttSn[0] && gSettings.mqttCode[0];
 }
+
+bool settingsSetLanMqttIp(const char* v) { return setIpv4(v, gSettings.lanMqttIp, sizeof(gSettings.lanMqttIp)); }
+
+bool settingsSetLanMqttPort(long p) {
+  if (p < 1 || p > 65535) return false;
+  gSettings.lanMqttPort = (uint16_t)p;
+  return true;
+}
+
+// topic 前缀：只拒绝 MQTT 通配符（+ #）和空白、控制字符，中文等 UTF-8 允许。
+// 结尾统一补 /，否则拼出来会变成 semiamsstate
+bool settingsSetLanMqttTopic(const char* v) {
+  if (!v) return false;
+  if (!*v) {  // 留空 = 恢复默认
+    strlcpy(gSettings.lanMqttTopic, "semiams/", sizeof(gSettings.lanMqttTopic));
+    return true;
+  }
+  const size_t n = strlen(v);
+  if (n > sizeof(gSettings.lanMqttTopic) - 2) return false;
+  for (size_t i = 0; i < n; i++) {
+    const unsigned char c = (unsigned char)v[i];
+    if (c == '+' || c == '#' || c == ' ' || c < 0x20 || c == 0x7f) return false;
+  }
+  char buf[sizeof(gSettings.lanMqttTopic)];
+  strlcpy(buf, v, sizeof(buf));
+  if (buf[n - 1] != '/') {
+    buf[n] = '/';
+    buf[n + 1] = 0;
+  }
+  strlcpy(gSettings.lanMqttTopic, buf, sizeof(gSettings.lanMqttTopic));
+  return true;
+}
+
+bool settingsLanMqttConfigured() { return gSettings.lanMqttEnable && gSettings.lanMqttIp[0]; }
 
 // ---- 从旧分区迁移参数 ----
 // v1.1.4 及以前按 4MB 分区编译（eagle.flash.4m1m.ld，文件系统在 0x300000、块大小 8KB）。这块模组的闪存
@@ -200,6 +237,10 @@ bool settingsBegin() {
     else if (k == "mqtt_unload_wait_s") settingsSetMqttUnloadWait(v.toInt());
     else if (k == "mqtt_auto_load") gSettings.mqttAutoLoad = v.toInt() != 0;
     else if (k == "mqtt_auto_unload") gSettings.mqttAutoUnload = v.toInt() != 0;
+    else if (k == "lan_mqtt_enable") gSettings.lanMqttEnable = v.toInt() != 0;
+    else if (k == "lan_mqtt_ip") settingsSetLanMqttIp(v.c_str());
+    else if (k == "lan_mqtt_port") settingsSetLanMqttPort(v.toInt());
+    else if (k == "lan_mqtt_topic") settingsSetLanMqttTopic(v.c_str());
     else settingsSet(k.c_str(), v.toInt());
   }
   f.close();
@@ -220,6 +261,8 @@ bool settingsSave() {
            gSettings.mqttEnable ? 1 : 0, gSettings.mqttIp, gSettings.mqttSn, gSettings.mqttCode,
            (unsigned)gSettings.mqttUnloadWaitS);
   f.printf("mqtt_auto_load=%d\nmqtt_auto_unload=%d\n", gSettings.mqttAutoLoad ? 1 : 0, gSettings.mqttAutoUnload ? 1 : 0);
+  f.printf("lan_mqtt_enable=%d\nlan_mqtt_ip=%s\nlan_mqtt_port=%u\nlan_mqtt_topic=%s\n", gSettings.lanMqttEnable ? 1 : 0,
+           gSettings.lanMqttIp, (unsigned)gSettings.lanMqttPort, gSettings.lanMqttTopic);
   f.close();
   return true;
 }

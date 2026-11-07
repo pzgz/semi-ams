@@ -13,6 +13,8 @@
 #include "crash.h"
 #include "cloud.h"
 #include "config.h"
+#include "lanmqtt.h"
+#include "netinfo.h"
 #include "printer.h"
 #include "settings.h"
 
@@ -74,6 +76,7 @@ pre{font-size:12px;background:#111;color:#ddd;padding:10px;border-radius:8px;whi
 <span>运行时长</span><span id="up">-</span>
 <span>空闲内存</span><span id="hp">-</span>
 <span>WiFi</span><span id="wifi">-</span>
+<span>MAC</span><span id="mac">-</span>
 <span>点灯</span><span id="cloud">-</span>
 </div></div>
 <div class="card"><h2>操作</h2><div class="btns">
@@ -101,8 +104,15 @@ const char MQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px
 打印机和本设备要在同一个局域网，打印机可以保持连接拓竹云。IP、序列号、访问码在打印机屏幕的设置里能看到（局域网 / 设备信息）。</p></div>
 )HTML";
 
-const char PAGE_TAIL[] PROGMEM = R"HTML(
-<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form></div>
+// 局域网 MQTT：把本机状态发布给局域网里的服务器（Home Assistant / Node-RED 等）
+const char LANMQTT_HEAD[] PROGMEM = R"HTML(<div class="card"><h2>局域网 MQTT</h2><form method="post" action="/api/lanmqtt">
+)HTML";
+
+const char LANMQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form>
+<p style="font-size:13px;color:#888;margin:8px 0 0">把状态发布到局域网 MQTT 服务器（Home Assistant / Node-RED 等），topic 是 <code>前缀 + state</code>，服务器掉线检测用 <code>前缀 + availability</code>。连接情况看下面日志。</p></div>
+)HTML";
+
+const char PAGE_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form></div>
 <div class="card"><h2>日志</h2><pre id="log"></pre><div class="btns">
 <a href="/api/log" target="_blank"><button class="gray">查看完整日志（重启后也保留）</button></a>
 <button class="gray" onclick="if(confirm('清空保存的日志文件？'))fetch('/api/log/clear',{method:'POST'})">清空日志文件</button>
@@ -116,6 +126,7 @@ function btn(p,pin,lv){return '<span class="dot'+(p?' on':'')+'"></span>'+(p?'�
 function cmd(c){fetch('/api/cmd?c='+c,{method:'POST'}).then(r=>r.json()).then(j=>{document.getElementById('msg').textContent=j.msg})}
 function upd(){fetch('/api/status').then(r=>r.json()).then(s=>{
 for(const k of ['state','motor','up','wifi','cloud','ver','mq','mp','me'])document.getElementById(k).textContent=s[k];
+document.getElementById('mac').textContent=s.mac||'-';
 for(const k of ['in','ready','lack','full'])document.getElementById(k).innerHTML=dot(s[k]);
 document.getElementById('bs').innerHTML=btn(s.bs,'GPIO0',s.g0);
 document.getElementById('be').innerHTML=btn(s.be,'GPIO15',s.g15);
@@ -185,11 +196,26 @@ void handleRoot() {
   mq += gSettings.mqttUnloadWaitS;
   mq += F("\"></label>\n");
 
+  String lan;
+  lan += F("<label>启用<input type=\"checkbox\" name=\"enable\" value=\"1\" style=\"width:auto\"");
+  if (gSettings.lanMqttEnable) lan += F(" checked");
+  lan += F("></label><input type=\"hidden\" name=\"has_enable\" value=\"1\">\n");
+  lan += F("<label>IP<input class=\"wide\" name=\"ip\" placeholder=\"192.168.5.10\" value=\"");
+  lan += gSettings.lanMqttIp;
+  lan += F("\"></label>\n<label>端口<input type=\"number\" name=\"port\" min=\"1\" max=\"65535\" value=\"");
+  lan += (unsigned int)gSettings.lanMqttPort;
+  lan += F("\"></label>\n<label>topic 前缀<input class=\"wide\" name=\"topic\" placeholder=\"semiams/\" value=\"");
+  lan += gSettings.lanMqttTopic;
+  lan += F("\"></label>\n");
+
   server.chunkedResponseModeStart(200, "text/html; charset=utf-8");
   server.sendContent_P(PAGE_HEAD);
   server.sendContent_P(MQTT_HEAD);
   server.sendContent(mq);
   server.sendContent_P(MQTT_TAIL);
+  server.sendContent_P(LANMQTT_HEAD);
+  server.sendContent(lan);
+  server.sendContent_P(LANMQTT_TAIL);
   server.sendContent_P(PARAM_HEAD);
   server.sendContent(form);
   server.sendContent_P(PAGE_TAIL);
@@ -244,6 +270,13 @@ void handleStatus() {
   j += WiFi.RSSI();
   j += F("dBm ");
   j += WiFi.localIP().toString();
+  char ipBuf[16], macBuf[18];
+  netinfo::ip(ipBuf, sizeof(ipBuf));
+  netinfo::mac(macBuf, sizeof(macBuf));
+  j += F("\",\"ip\":\"");
+  j += ipBuf;
+  j += F("\",\"mac\":\"");
+  j += macBuf;
   j += F("\",\"cloud\":\"");
   j += FPSTR(cloud::statusText());
   j += F("\",\"mq\":\"");
@@ -252,6 +285,8 @@ void handleStatus() {
   j += jsonEscape(printer::printerText());
   j += F("\",\"me\":\"");
   j += jsonEscape(printer::lastEvent());
+  j += F("\",\"lq\":\"");
+  j += jsonEscape(lanmqtt::statusText());
   j += F("\",\"log\":[");
   // 分块发送，避免每 1.5 秒拼一个几 KB 的大字符串造成堆碎片
   server.chunkedResponseModeStart(200, "application/json; charset=utf-8");
@@ -344,6 +379,26 @@ void handleMqtt() {
   server.send(303);
 }
 
+void handleLanMqtt() {
+  bool bad = false;
+  String ip = server.arg("ip"), port = server.arg("port"), topic = server.arg("topic");
+  ip.trim();
+  port.trim();
+  topic.trim();
+  if (!settingsSetLanMqttIp(ip.c_str())) bad = true;
+  if (port.length() && !settingsSetLanMqttPort(port.toInt())) bad = true;
+  if (!settingsSetLanMqttTopic(topic.c_str())) bad = true;
+  if (server.hasArg("has_enable")) gSettings.lanMqttEnable = server.arg("enable") == "1";
+  settingsSave();
+  lanmqtt::applySettings();  // 断开旧连接，按新设置重连
+  LOG("网页：局域网 MQTT 设置已保存（" SEMI_PS "，%s:%u，前缀 %s）" SEMI_PS,
+      gSettings.lanMqttEnable ? PSTR("已启用") : PSTR("未启用"), gSettings.lanMqttIp,
+      (unsigned)gSettings.lanMqttPort, gSettings.lanMqttTopic,
+      bad ? PSTR("，有格式不对的项未修改") : "");
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
 void handleLog() {
   server.chunkedResponseModeStart(200, "text/plain; charset=utf-8");
   static const char* const kFiles[] = {app::kLogFileOld, app::kLogFile};
@@ -401,6 +456,7 @@ void startServices() {
   server.on("/api/cmd", HTTP_POST, handleCmd);
   server.on("/api/settings", HTTP_POST, handleSettings);
   server.on("/api/mqtt", HTTP_POST, handleMqtt);
+  server.on("/api/lanmqtt", HTTP_POST, handleLanMqtt);
   server.on("/api/log", HTTP_GET, handleLog);
   server.on("/api/log/clear", HTTP_POST, handleLogClear);
   server.on("/api/reset", HTTP_POST, handleReset);
@@ -520,6 +576,7 @@ String ip() { return WiFi.localIP().toString(); }
 void resetAll() {
   LOG("清除 WiFi 和点灯密钥");
   settingsSetBlinkerKey("");
+  gSettings.lanMqttEnable = false;  // 只关掉局域网 MQTT 开关，服务器地址等配置保留
   settingsSave();
   wm.resetSettings();
   app::requestRestart(PSTR("重置配网"));

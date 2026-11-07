@@ -18,6 +18,12 @@ struct Settings {
   // 退料只有正在"打印中"的那台会执行，一般都开着
   bool mqttAutoLoad = true;    // 响应进料：打印机用外置料盘开始打印时自动送料
   bool mqttAutoUnload = true;  // 响应退料：在打印机上退料时自动退料
+  // 局域网 MQTT：把本机状态发布给局域网里的 MQTT 服务器（Home Assistant / Node-RED 等），
+  // 和上面连接打印机用的 MQTT 是两回事，互不影响
+  bool lanMqttEnable = false;
+  char lanMqttIp[16] = "";              // 服务器 IP
+  uint16_t lanMqttPort = 1883;          // 服务器端口
+  char lanMqttTopic[33] = "semiams/";   // topic 前缀，结尾一定带 /
 };
 
 struct SettingDef {
@@ -47,3 +53,9 @@ bool settingsSetMqttSn(const char* v);    // 字母和数字，8–20 位
 bool settingsSetMqttCode(const char* v);  // 字母和数字，6–16 位（拓竹一般是 8 位）
 bool settingsSetMqttUnloadWait(long s);   // 0–600 秒
 bool settingsMqttConfigured();            // IP、序列号、访问码都已填写
+
+// 局域网 MQTT 设置：格式不对返回 false 且不修改
+bool settingsSetLanMqttIp(const char* v);     // IPv4，例如 192.168.5.10
+bool settingsSetLanMqttPort(long p);          // 1–65535
+bool settingsSetLanMqttTopic(const char* v);  // topic 前缀，留空恢复默认；结尾自动补 /
+bool settingsLanMqttConfigured();             // 已启用且填了 IP
