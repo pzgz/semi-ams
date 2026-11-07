@@ -1,6 +1,8 @@
 #include "settings.h"
 
 #include <LittleFS.h>
+
+#include "lanmqtt_proto.h"
 #include <pgmspace.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -94,9 +96,10 @@ static bool alnum(const char* v, size_t minLen, size_t maxLen) {
   return true;
 }
 
-bool settingsSetMqttIp(const char* v) {
+// 解析 IPv4 并规范化写回 out；空字符串表示清空
+static bool setIpv4(const char* v, char* out, size_t cap) {
   if (!v || !*v) {
-    gSettings.mqttIp[0] = 0;
+    out[0] = 0;
     return true;
   }
   int a, b, c, d;
@@ -105,9 +108,11 @@ bool settingsSetMqttIp(const char* v) {
   if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) return false;
   char buf[24];
   snprintf(buf, sizeof(buf), "%d.%d.%d.%d", a, b, c, d);
-  strlcpy(gSettings.mqttIp, buf, sizeof(gSettings.mqttIp));
+  strlcpy(out, buf, cap);
   return true;
 }
+
+bool settingsSetMqttIp(const char* v) { return setIpv4(v, gSettings.mqttIp, sizeof(gSettings.mqttIp)); }
 
 bool settingsSetMqttSn(const char* v) {
   if (v && *v && !alnum(v, 8, 20)) return false;
@@ -131,6 +136,48 @@ bool settingsSetMqttUnloadWait(long s) {
 bool settingsMqttConfigured() {
   return gSettings.mqttIp[0] && gSettings.mqttSn[0] && gSettings.mqttCode[0];
 }
+
+bool settingsSetLanMqttIp(const char* v) { return setIpv4(v, gSettings.lanMqttIp, sizeof(gSettings.lanMqttIp)); }
+
+bool settingsSetLanMqttPort(long p) {
+  if (p < 1 || p > 65535) return false;
+  gSettings.lanMqttPort = (uint16_t)p;
+  return true;
+}
+
+// topic 前缀：规则见 semi::lan::normalizePrefix（可以在电脑上测试）
+bool settingsSetLanMqttTopic(const char* v) {
+  return semi::lan::normalizePrefix(v, gSettings.lanMqttTopic, sizeof(gSettings.lanMqttTopic));
+}
+
+// 用户名和密码只允许可打印 ASCII：要写进 settings.txt 的一行里，用户名还要回填到网页
+static bool printableAscii(const char* v, size_t maxLen, const char* reject) {
+  const size_t n = strlen(v);
+  if (n > maxLen) return false;
+  if (n && (v[0] == ' ' || v[n - 1] == ' ')) return false;  // 读文件时会去掉首尾空白
+  for (size_t i = 0; i < n; i++) {
+    const unsigned char c = (unsigned char)v[i];
+    if (c < 0x20 || c > 0x7e || (reject && strchr(reject, c))) return false;
+  }
+  return true;
+}
+
+bool settingsSetLanMqttUser(const char* v) {
+  if (!v) v = "";
+  if (!printableAscii(v, sizeof(gSettings.lanMqttUser) - 1, "\"'<>&\\")) return false;
+  strlcpy(gSettings.lanMqttUser, v, sizeof(gSettings.lanMqttUser));
+  if (!*v) gSettings.lanMqttPass[0] = 0;  // 不认证时密码也没有意义
+  return true;
+}
+
+bool settingsSetLanMqttPass(const char* v) {
+  if (!v) v = "";
+  if (!printableAscii(v, sizeof(gSettings.lanMqttPass) - 1, nullptr)) return false;
+  strlcpy(gSettings.lanMqttPass, v, sizeof(gSettings.lanMqttPass));
+  return true;
+}
+
+bool settingsLanMqttConfigured() { return gSettings.lanMqttEnable && gSettings.lanMqttIp[0]; }
 
 // ---- 从旧分区迁移参数 ----
 // v1.1.4 及以前按 4MB 分区编译（eagle.flash.4m1m.ld，文件系统在 0x300000、块大小 8KB）。这块模组的闪存
@@ -200,6 +247,13 @@ bool settingsBegin() {
     else if (k == "mqtt_unload_wait_s") settingsSetMqttUnloadWait(v.toInt());
     else if (k == "mqtt_auto_load") gSettings.mqttAutoLoad = v.toInt() != 0;
     else if (k == "mqtt_auto_unload") gSettings.mqttAutoUnload = v.toInt() != 0;
+    else if (k == "lan_mqtt_enable") gSettings.lanMqttEnable = v.toInt() != 0;
+    else if (k == "lan_mqtt_ip") settingsSetLanMqttIp(v.c_str());
+    else if (k == "lan_mqtt_port") settingsSetLanMqttPort(v.toInt());
+    else if (k == "lan_mqtt_topic") settingsSetLanMqttTopic(v.c_str());
+    else if (k == "lan_mqtt_user") settingsSetLanMqttUser(v.c_str());
+    else if (k == "lan_mqtt_pass") settingsSetLanMqttPass(v.c_str());
+    else if (k == "lan_mqtt_control") gSettings.lanMqttControl = v.toInt() != 0;
     else settingsSet(k.c_str(), v.toInt());
   }
   f.close();
@@ -220,6 +274,12 @@ bool settingsSave() {
            gSettings.mqttEnable ? 1 : 0, gSettings.mqttIp, gSettings.mqttSn, gSettings.mqttCode,
            (unsigned)gSettings.mqttUnloadWaitS);
   f.printf("mqtt_auto_load=%d\nmqtt_auto_unload=%d\n", gSettings.mqttAutoLoad ? 1 : 0, gSettings.mqttAutoUnload ? 1 : 0);
+  // 格式串放在 Flash 里（printf_P），省内存
+  f.printf_P(PSTR("lan_mqtt_enable=%d\nlan_mqtt_ip=%s\nlan_mqtt_port=%u\nlan_mqtt_topic=%s\n"),
+             gSettings.lanMqttEnable ? 1 : 0, gSettings.lanMqttIp, (unsigned)gSettings.lanMqttPort,
+             gSettings.lanMqttTopic);
+  f.printf_P(PSTR("lan_mqtt_user=%s\nlan_mqtt_pass=%s\nlan_mqtt_control=%d\n"), gSettings.lanMqttUser,
+             gSettings.lanMqttPass, gSettings.lanMqttControl ? 1 : 0);
   f.close();
   return true;
 }

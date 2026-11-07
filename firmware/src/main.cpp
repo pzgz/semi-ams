@@ -19,6 +19,7 @@
 #include "crash.h"
 #include "fsm.h"
 #include "input.h"
+#include "lanmqtt.h"
 #include "motor_logic.h"
 #include "net.h"
 #include "printer.h"
@@ -756,6 +757,7 @@ void loop() {
   crash::noteHeap(ESP.getFreeHeap());
   net::loop();
   printer::loop();
+  lanmqtt::loop();
   pollSerial();
   syncPrintingMark();
   flushLogs();

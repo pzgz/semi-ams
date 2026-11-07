@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>局域网 MQTT 消息参考</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1f2329; --muted:#646a73; --border:#e3e5e9;
+  --accent:#1a5fd6; --accent-weak:#e9f0fd; --code-bg:#f1f3f5; --code-text:#24292f;
+  --row:#fafbfc; --shadow:0 1px 2px rgba(15,23,42,.06),0 2px 8px rgba(15,23,42,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+    --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+    --row:#1e2128; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111317; --panel:#1a1d23; --text:#e6e8eb; --muted:#9aa1ab; --border:#2c313a;
+  --accent:#6ea2ff; --accent-weak:#1d2a42; --code-bg:#22262e; --code-text:#e6e8eb;
+  --row:#1e2128; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+.toc{position:sticky;top:20px;align-self:start;max-height:calc(100vh - 40px);overflow:auto;
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 10px 14px 6px;box-shadow:var(--shadow);font-size:13.5px}
+.toc summary{list-style:none;cursor:pointer;font-weight:600;padding:2px 12px 8px;color:var(--text)}
+.toc summary::-webkit-details-marker{display:none}
+.toc ul{list-style:none;margin:0;padding-left:12px}
+.toc-list>ul{padding-left:4px}
+.toc-list>ul>li{margin-top:6px}
+.toc-list>ul>li>a{color:var(--text);font-weight:600}
+.toc li{margin:1px 0}
+.toc a{display:block;padding:3px 8px;border-radius:6px;color:var(--muted);text-decoration:none;line-height:1.45}
+.toc a:hover{background:var(--accent-weak);color:var(--text)}
+.toc a.active{background:var(--accent-weak);color:var(--accent);font-weight:600}
+main{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:36px 44px 48px;box-shadow:var(--shadow);min-width:0}
+h1{font-size:28px;line-height:1.3;margin:0 0 18px;letter-spacing:.01em}
+h2{font-size:21px;margin:44px 0 14px;padding-top:22px;border-top:1px solid var(--border)}
+h3{font-size:17px;margin:30px 0 10px}
+h2+h3{margin-top:16px}
+h4{font-size:15px;margin:22px 0 8px}
+h3+h4{margin-top:12px}
+p,li{color:var(--text)}
+a{color:var(--accent)}
+hr{display:none}
+strong{font-weight:650}
+ul,ol{padding-left:1.4em}
+li{margin:3px 0}
+code{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--code-bg);color:var(--code-text);
+  padding:.12em .4em;border-radius:5px;word-break:break-word}
+pre{position:relative;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.55}
+pre code{background:none;padding:0;font-size:13px;word-break:normal;white-space:pre}
+.copy{position:absolute;top:8px;right:8px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  font-size:12px;border-radius:6px;padding:2px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus{opacity:1}
+.table-wrap{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6}
+th,td{padding:8px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{background:var(--row);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even) td{background:var(--row)}
+td code{white-space:nowrap}
+figure.diagram{margin:18px 0 22px;padding:16px;background:#fff;color:#1f2329;color-scheme:light;border:1px solid var(--border);border-radius:12px;overflow-x:auto;text-align:center}
+figure.diagram svg{max-width:100%;height:auto}
+figure.diagram svg foreignObject div,figure.diagram svg foreignObject span,figure.diagram svg foreignObject p{color:#1f2329}
+.theme-toggle{position:fixed;right:16px;bottom:16px;border:1px solid var(--border);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width: 1000px){
+  .layout{grid-template-columns:1fr;padding:16px 16px 72px;gap:14px}
+  .toc{position:static;max-height:none}
+  main{padding:22px 18px 32px;border-radius:12px}
+  h1{font-size:23px}
+  h2{font-size:19px}
+  figure.diagram{padding:10px}
+  figure.diagram svg{min-width:560px}
+}
+@media print{
+  body{background:#fff}
+  .toc,.theme-toggle,.copy{display:none}
+  .layout{display:block;padding:0}
+  main{border:none;box-shadow:none;padding:0}
+  h2{break-after:avoid}
+  pre,figure,.table-wrap{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <details class="toc" open>
+    <summary>目录</summary>
+    <div class="toc-list">
+<ul>
+<li><a href="#1-设置">1. 设置</a></li>
+<li><a href="#2-topic">2. Topic</a></li>
+<li><a href="#3-状态-前缀设备idstate">3. 状态 &lt;前缀&gt;&lt;设备ID&gt;/state</a></li>
+<li><a href="#4-在线情况-前缀设备idavailability">4. 在线情况 &lt;前缀&gt;&lt;设备ID&gt;/availability</a></li>
+<li><a href="#5-控制-前缀control">5. 控制 &lt;前缀&gt;control</a></li>
+<li><a href="#6-home-assistant-示例">6. Home Assistant 示例</a></li>
+<li><a href="#7-以后做群控时">7. 以后做群控时</a></li>
+</ul>
+</div>
+
+  </details>
+  <main>
+<h1 id="局域网-mqtt-消息参考">局域网 MQTT 消息参考</h1>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>适用版本</td>
+<td>v1.3.0 起</td>
+</tr>
+<tr>
+<td>用途</td>
+<td>把进料器的状态发布到局域网里的 MQTT 服务器（Home Assistant、Node-RED、以后的群控程序），可选接受控制命令</td>
+</tr>
+<tr>
+<td>和拓竹打印机 MQTT 的关系</td>
+<td>两回事，互不影响。连接打印机的那个见 <a href="拓竹MQTT消息参考.html">拓竹MQTT消息参考</a></td>
+</tr>
+<tr>
+<td>协议</td>
+<td>MQTT 3.1.1，普通 TCP（默认端口 1883），不加密；可选用户名和密码</td>
+</tr>
+<tr>
+<td>代码</td>
+<td><code>src/lanmqtt.cpp</code>（连接、收发），<code>src/lanmqtt_proto.h</code>（topic、设备 ID、控制命令解析，有仿真测试）</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="1-设置">1. 设置</h2>
+<p>在设备网页的"局域网 MQTT"卡片里修改，保存后马上按新设置重连。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>参数</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>启用</td>
+<td><code>lan_mqtt_enable</code></td>
+<td>关</td>
+<td></td>
+</tr>
+<tr>
+<td>允许远程控制</td>
+<td><code>lan_mqtt_control</code></td>
+<td>关</td>
+<td>开了才订阅 <code>&lt;前缀&gt;control</code>、执行控制命令。局域网里能连上这个服务器的程序都能发命令，按需要开</td>
+</tr>
+<tr>
+<td>IP</td>
+<td><code>lan_mqtt_ip</code></td>
+<td>空</td>
+<td>MQTT 服务器的 IPv4 地址</td>
+</tr>
+<tr>
+<td>端口</td>
+<td><code>lan_mqtt_port</code></td>
+<td>1883</td>
+<td>1–65535</td>
+</tr>
+<tr>
+<td>topic 前缀</td>
+<td><code>lan_mqtt_topic</code></td>
+<td><code>semiams/</code></td>
+<td>留空恢复默认，结尾自动补 <code>/</code>，最长 32 字节。不能有 <code>+</code> <code>#</code>、空格、控制字符和 <code>"</code> <code>'</code> <code>&lt;</code> <code>&gt;</code> <code>&amp;</code> <code>\</code>，中文可以</td>
+</tr>
+<tr>
+<td>用户名</td>
+<td><code>lan_mqtt_user</code></td>
+<td>空</td>
+<td>留空 = 不登录。Home Assistant 的 Mosquitto 加载项默认要求登录，要在 HA 里建一个用户。可打印 ASCII，最长 32 位，不能有 <code>"</code> <code>'</code> <code>&lt;</code> <code>&gt;</code> <code>&amp;</code> <code>\</code></td>
+</tr>
+<tr>
+<td>密码</td>
+<td><code>lan_mqtt_pass</code></td>
+<td>空</td>
+<td>网页上不显示，留空表示不修改；清空用户名时密码也一起清空。可打印 ASCII，最长 64 位</td>
+</tr>
+</tbody>
+</table></div>
+<p>卡片上方的"连接"一行显示连接情况：未启用、未填服务器 IP、等点灯初始化完成、连接中、已连接 IP:端口、x 秒后重连（原因）。卡片下方显示本机的状态 topic，例如 <code>semiams/84f3ebdd2700/state</code>。</p>
+<p><strong>连接时机</strong>（和连接拓竹打印机的规则一样，避免内存不够）：</p>
+<ul>
+<li>开机后等点灯初始化完成再连（最多等 90 秒）。</li>
+<li>空闲内存不到 8000 字节时不连，日志写"空闲内存不足…，暂不连接局域网 MQTT"，60 秒后再看；连着的时候空闲内存低于 3000 字节就先断开。</li>
+<li>固件升级时断开。</li>
+<li>只在电机停着的时候发起连接：连不上服务器时 <code>connect()</code> 会阻塞最长 2 秒。</li>
+<li>断开后按 5、10、20、40、60 秒退避重连；用户名或密码错误时 60 秒后再试。</li>
+</ul>
+<h2 id="2-topic">2. Topic</h2>
+<p><code>&lt;设备ID&gt;</code> 是本机 MAC 去掉冒号的小写，例如 MAC <code>84:f3:eb:dd:27:00</code> 的设备 ID 是 <code>84f3ebdd2700</code>。</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>方向</th>
+<th>保留（retain）</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;前缀&gt;&lt;设备ID&gt;/state</code></td>
+<td>设备 → 服务器</td>
+<td>是</td>
+<td>状态 JSON（第 3 节）</td>
+</tr>
+<tr>
+<td><code>&lt;前缀&gt;&lt;设备ID&gt;/availability</code></td>
+<td>设备 → 服务器</td>
+<td>是</td>
+<td>在线情况 JSON（第 4 节），offline 也是遗嘱</td>
+</tr>
+<tr>
+<td><code>&lt;前缀&gt;control</code></td>
+<td>服务器 → 设备</td>
+<td><strong>不要保留</strong></td>
+<td>控制命令（第 5 节），几台共用，payload 里的 <code>mac</code> 等于本机才执行</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>为什么每台的 state、availability 要用各自的 topic：</strong> 服务器的保留消息按 topic 只存一条。几台共用 <code>semiams/state</code> 的话，服务器只留下最后发的那一台，后来才订阅的程序（例如重启后的群控程序、Home Assistant）只看得到一台；遗嘱也一样，一台掉线，服务器就把共用的 availability 写成 offline，另一台明明还在线。</p>
+<p><strong>几台一起收：</strong> 订阅 <code>semiams/+/state</code> 和 <code>semiams/+/availability</code> 就能收到所有设备。payload 里都带 <code>ip</code> 和 <code>mac</code>，直接按 payload 区分是哪台，不用去截 topic。</p>
+<pre><code class="language-bash"># 看所有设备的状态和在线情况（-v 同时显示 topic）
+mosquitto_sub -h 192.168.5.10 -u 用户名 -P 密码 -v -t 'semiams/+/state' -t 'semiams/+/availability'
+</code></pre>
+<h2 id="3-状态-前缀设备idstate">3. 状态 <code>&lt;前缀&gt;&lt;设备ID&gt;/state</code></h2>
+<pre><code class="language-json">{
+  &quot;state&quot;: &quot;无耗材&quot;,
+  &quot;key&quot;: &quot;NO_MATERIAL&quot;,
+  &quot;motor&quot;: &quot;停止&quot;,
+  &quot;duty&quot;: 0,
+  &quot;in&quot;: 0,
+  &quot;ready&quot;: 0,
+  &quot;lack&quot;: 0,
+  &quot;full&quot;: 0,
+  &quot;rssi&quot;: -77,
+  &quot;heap&quot;: 12480,
+  &quot;uptime&quot;: 126,
+  &quot;ip&quot;: &quot;192.168.5.222&quot;,
+  &quot;mac&quot;: &quot;84:f3:eb:dd:27:00&quot;
+}
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>state</code></td>
+<td>状态的中文名（给人看，以后可能改字）</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>状态的固定英文名，<strong>自动化判断用这个</strong>：<code>NO_MATERIAL</code> 无耗材、<code>MATERIAL_LOADING</code> 耗材吸入中、<code>MATERIAL_READY</code> 耗材就绪、<code>PRINTING</code> 打印中、<code>UNLOADING</code> 退料中、<code>MATERIAL_RETRACTED</code> 已退料、<code>EMERGENCY_STOPPED</code> 紧急停止</td>
+</tr>
+<tr>
+<td><code>motor</code></td>
+<td>电机：停止 / 正转 / 反转</td>
+</tr>
+<tr>
+<td><code>duty</code></td>
+<td>电机占空比 %</td>
+</tr>
+<tr>
+<td><code>in</code> / <code>ready</code></td>
+<td>进料口开关 / 就绪开关，1 = 有耗材</td>
+</tr>
+<tr>
+<td><code>lack</code> / <code>full</code></td>
+<td>EMPTY / FULL 霍尔，1 = 有效</td>
+</tr>
+<tr>
+<td><code>rssi</code></td>
+<td>WiFi 信号 dBm</td>
+</tr>
+<tr>
+<td><code>heap</code></td>
+<td>空闲内存（字节）</td>
+</tr>
+<tr>
+<td><code>uptime</code></td>
+<td>运行时长（秒）</td>
+</tr>
+<tr>
+<td><code>ip</code> / <code>mac</code></td>
+<td>本机 IP 和 MAC；取不到时为空串</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>什么时候发：</strong></p>
+<ul>
+<li>连上服务器时马上发一份。</li>
+<li>状态机的状态或电机方向变了就发，两次之间至少隔 500ms。</li>
+<li>没变化也每 30 秒发一次，当心跳用。只有开关、霍尔变了、状态和电机没变时（例如耗材就绪时霍尔变化），要等这次心跳才发出去。</li>
+</ul>
+<p>QoS 0，保留。</p>
+<h2 id="4-在线情况-前缀设备idavailability">4. 在线情况 <code>&lt;前缀&gt;&lt;设备ID&gt;/availability</code></h2>
+<pre><code class="language-json">{&quot;state&quot;: &quot;online&quot;, &quot;ip&quot;: &quot;192.168.5.222&quot;, &quot;mac&quot;: &quot;84:f3:eb:dd:27:00&quot;}
+</code></pre>
+<ul>
+<li>连上服务器时发 <code>online</code>（保留）。</li>
+<li>主动断开时（改设置、内存不足、固件升级、超时等）先发 <code>offline</code>（保留）再断开。</li>
+<li>掉电、断网、崩溃时，服务器按遗嘱代发 <code>offline</code>（遗嘱内容在连接时就定好了，同样带 ip 和 mac）。</li>
+<li>保活：每 30 秒一次 PINGREQ，keepalive 60 秒；90 秒收不到服务器任何数据就认为连接已断，重新连接。</li>
+</ul>
+<h2 id="5-控制-前缀control">5. 控制 <code>&lt;前缀&gt;control</code></h2>
+<p>要先在网页上勾选"允许远程控制"，否则不订阅这个 topic。订阅用 QoS 1。</p>
+<pre><code class="language-json">{&quot;mac&quot;: &quot;84:f3:eb:dd:27:00&quot;, &quot;start&quot;: &quot;on&quot;}
+</code></pre>
+<ul>
+<li><strong><code>mac</code></strong>：必填，等于本机 MAC 才执行；不区分大小写，冒号、横线可有可无（<code>84F3EBDD2700</code> 也行）。几台共用这个 topic，发给别的设备的命令不记日志。可以带 <code>ip</code> 等其它字段，固件忽略。</li>
+<li><strong>动作</strong>：下表里的一个。一条消息只执行第一个动作。</li>
+<li><strong>值</strong>：<code>"on"</code>/<code>"off"</code>、<code>true</code>/<code>false</code>、<code>1</code>/<code>0</code>（字符串或数字都行）。</li>
+<li><strong>不要用保留（retain）发布。</strong> 服务器上的保留控制消息会在每次重连、订阅时补发一遍；固件不执行它，日志写"服务器上有一条保留的控制消息，不执行"。要清掉它，向 <code>&lt;前缀&gt;control</code> 发一条空的保留消息（<code>mosquitto_pub -r -n -t semiams/control</code>）。</li>
+</ul>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>动作</th>
+<th>on</th>
+<th>off</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td>开始打印：耗材就绪时进入打印中，已退料时先吸料再打印，吸入中时吸完直接打印；已经在打印中或退料中则不动</td>
+<td>结束打印：只有打印中才开始退料，其它状态不动</td>
+</tr>
+<tr>
+<td><code>emg</code></td>
+<td>紧急停止（已经是紧急停止则不动）</td>
+<td>解除紧急停止，回到原来的状态（不在紧急停止则不动）</td>
+</tr>
+<tr>
+<td><code>jogf</code></td>
+<td>正转 2 秒（补料速度），只在无耗材、耗材就绪、已退料时可用</td>
+<td>不动</td>
+</tr>
+<tr>
+<td><code>jogr</code></td>
+<td>反转 2 秒，条件同上</td>
+<td>不动</td>
+</tr>
+<tr>
+<td><code>restart</code></td>
+<td>重启</td>
+<td>不动</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>start</code>、<code>emg</code> 按 on / off 的含义执行，重复发同一条不会来回切换，这一点和网页、点灯上的按钮（按一下切换一次）不同。</p>
+<pre><code class="language-bash"># 开始打印
+mosquitto_pub -h 192.168.5.10 -u 用户名 -P 密码 -t semiams/control -m '{&quot;mac&quot;:&quot;84:f3:eb:dd:27:00&quot;,&quot;start&quot;:&quot;on&quot;}'
+# 紧急停止
+mosquitto_pub -h 192.168.5.10 -u 用户名 -P 密码 -t semiams/control -m '{&quot;mac&quot;:&quot;84:f3:eb:dd:27:00&quot;,&quot;emg&quot;:true}'
+</code></pre>
+<p>收到命令后，日志写"局域网 MQTT：开始打印"之类的记录；被忽略的原因也会写（不是有效的 JSON、没有 mac、没有可识别的动作、值不认识、状态不对）。</p>
+<h2 id="6-home-assistant-示例">6. Home Assistant 示例</h2>
+<p>下面按 HA 的 MQTT 文档写，<strong>还没在 HA 上实测</strong>，设备 ID 换成自己的：</p>
+<pre><code class="language-yaml">mqtt:
+  sensor:
+    - name: &quot;SEMI-AMS 状态&quot;
+      unique_id: semiams_84f3ebdd2700_state
+      state_topic: &quot;semiams/84f3ebdd2700/state&quot;
+      value_template: &quot;{{ value_json.state }}&quot;
+      availability_topic: &quot;semiams/84f3ebdd2700/availability&quot;
+      availability_template: &quot;{{ value_json.state }}&quot;
+      payload_available: &quot;online&quot;
+      payload_not_available: &quot;offline&quot;
+  button:
+    - name: &quot;SEMI-AMS 紧急停止&quot;
+      unique_id: semiams_84f3ebdd2700_emg
+      command_topic: &quot;semiams/control&quot;
+      payload_press: '{&quot;mac&quot;:&quot;84:f3:eb:dd:27:00&quot;,&quot;emg&quot;:&quot;on&quot;}'
+</code></pre>
+<h2 id="7-以后做群控时">7. 以后做群控时</h2>
+<ul>
+<li>订阅 <code>&lt;前缀&gt;+/state</code> 和 <code>&lt;前缀&gt;+/availability</code>，以 payload 里的 <code>mac</code> 为键维护每台设备的状态；<code>key</code> 字段做判断。</li>
+<li>发命令用共用的 <code>&lt;前缀&gt;control</code>，payload 里写目标设备的 <code>mac</code>。</li>
+<li>拓竹打印机的 MQTT 以后可能移到主控上做（见 <a href="多台SEMI-AMS协同方案.html">多台SEMI-AMS协同方案</a>）。建议到时候固件里仍保留现在的打印机逻辑，主控不在线时还能单台使用。</li>
+</ul>
+  </main>
+</div>
+<button class="theme-toggle" type="button" aria-label="切换深色/浅色">深色 / 浅色</button>
+<script>
+(function(){
+  var toc=document.querySelector('.toc');
+  if(window.matchMedia('(max-width: 1000px)').matches) toc.removeAttribute('open');
+
+  document.querySelectorAll('pre').forEach(function(pre){
+    var b=document.createElement('button'); b.className='copy'; b.type='button'; b.textContent='复制';
+    b.addEventListener('click',function(){
+      var t=pre.querySelector('code').innerText;
+      var done=function(){b.textContent='已复制';setTimeout(function(){b.textContent='复制'},1200)};
+      if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,function(){})}
+    });
+    pre.appendChild(b);
+  });
+
+  var root=document.documentElement, btn=document.querySelector('.theme-toggle');
+  try{var saved=localStorage.getItem('semi-doc-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('semi-doc-theme',next)}catch(e){}
+  });
+
+  var links={}; document.querySelectorAll('.toc a').forEach(function(a){links[decodeURIComponent(a.getAttribute('href').slice(1))]=a});
+  var heads=[].slice.call(document.querySelectorAll('main h2[id], main h3[id]'));
+  if('IntersectionObserver' in window){
+    var current=null;
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ current=e.target.id; } });
+      Object.keys(links).forEach(function(k){links[k].classList.toggle('active',k===current)});
+    },{rootMargin:'0px 0px -70% 0px'});
+    heads.forEach(function(h){io.observe(h)});
+  }
+})();
+</script>
+</body>
+</html>
