@@ -597,8 +597,7 @@ String ip() { return WiFi.localIP().toString(); }
 
 void resetAll() {
   LOG("清除 WiFi 和点灯密钥");
-  settingsSetBlinkerKey("");
-  gSettings.lanMqttEnable = false;  // 只关掉局域网 MQTT 开关，服务器地址等配置保留
+  settingsSetBlinkerKey("");  // 拓竹打印机和局域网 MQTT 的设置都保留，配好网后照常连接
   settingsSave();
   wm.resetSettings();
   app::requestRestart(PSTR("重置配网"));

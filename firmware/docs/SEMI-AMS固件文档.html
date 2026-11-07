@@ -1765,7 +1765,7 @@ pio run -e ota -t upload       # 无线升级（设备 IP 在 platformio.ini 的
 </tr>
 <tr>
 <td><code>wifireset</code></td>
-<td>清除 WiFi 和点灯密钥后重启</td>
+<td>清除 WiFi 和点灯密钥后重启（拓竹打印机和局域网 MQTT 的设置都保留）</td>
 </tr>
 <tr>
 <td><code>mqtt</code></td>
@@ -1846,7 +1846,7 @@ pio run -e ota -t upload       # 无线升级（设备 IP 在 platformio.ini 的
 <tr>
 <td>POST</td>
 <td><code>/api/reset</code></td>
-<td>清除 WiFi 和点灯密钥并重启（同时关掉局域网 MQTT，服务器地址等设置保留）</td>
+<td>清除 WiFi 和点灯密钥并重启（拓竹打印机和局域网 MQTT 的设置都保留，配好网后照常连接）</td>
 </tr>
 <tr>
 <td>GET/POST</td>

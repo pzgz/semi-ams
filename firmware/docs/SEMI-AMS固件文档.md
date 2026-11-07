@@ -754,7 +754,7 @@ v1.2.0 起固件按 2MB 分区，这块板可以无线升级。开机日志的"�
 | `set <参数> <值>` | 修改参数并保存，例如 `set unload_extra_ms 200` |
 | `key <点灯密钥>` | 设置点灯密钥，重启后生效 |
 | `restart` | 重启 |
-| `wifireset` | 清除 WiFi 和点灯密钥后重启 |
+| `wifireset` | 清除 WiFi 和点灯密钥后重启（拓竹打印机和局域网 MQTT 的设置都保留） |
 | `mqtt` | 查看拓竹打印机连接状态和设置 |
 | `mqtt on` / `mqtt off` | 开启 / 关闭拓竹打印机 MQTT |
 | `mqtt ip <IP>`、`mqtt sn <序列号>`、`mqtt code <访问码>` | 设置打印机 IP、序列号、访问码并重新连接 |
@@ -774,7 +774,7 @@ v1.2.0 起固件按 2MB 分区，这块板可以无线升级。开机日志的"�
 | POST | `/api/settings` | 表单方式提交参数（留空的项不修改），可以带 `blinker_key` |
 | POST | `/api/mqtt` | 表单方式提交拓竹打印机设置：`enable`（勾选为 1，需同时带 `has_enable=1`）、`load`、`unload`（响应进料、响应退料，勾选为 1，需同时带 `has_auto=1`）、`ip`、`sn`、`code`（留空不修改）、`wait` |
 | POST | `/api/lanmqtt` | 表单方式提交局域网 MQTT 设置：`enable`、`control`（启用、允许远程控制，勾选为 1，需同时带 `has_enable=1`）、`ip`、`port`、`topic`、`user`、`pass`（留空不修改） |
-| POST | `/api/reset` | 清除 WiFi 和点灯密钥并重启（同时关掉局域网 MQTT，服务器地址等设置保留） |
+| POST | `/api/reset` | 清除 WiFi 和点灯密钥并重启（拓竹打印机和局域网 MQTT 的设置都保留，配好网后照常连接） |
 | GET/POST | `/update` | 固件升级（admin / semi-ams） |
 
 ### 8.3 点灯控件
