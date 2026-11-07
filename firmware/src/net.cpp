@@ -104,12 +104,16 @@ const char MQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px
 打印机和本设备要在同一个局域网，打印机可以保持连接拓竹云。IP、序列号、访问码在打印机屏幕的设置里能看到（局域网 / 设备信息）。</p></div>
 )HTML";
 
-// 局域网 MQTT：把本机状态发布给局域网里的服务器（Home Assistant / Node-RED 等）
-const char LANMQTT_HEAD[] PROGMEM = R"HTML(<div class="card"><h2>局域网 MQTT</h2><form method="post" action="/api/lanmqtt">
+// 局域网 MQTT：把本机状态发布给局域网里的服务器（Home Assistant / Node-RED / 群控程序等）
+const char LANMQTT_HEAD[] PROGMEM = R"HTML(<div class="card"><h2>局域网 MQTT</h2><div class="grid">
+<span>连接</span><span class="v" id="lq">-</span>
+</div><form method="post" action="/api/lanmqtt" style="margin-top:10px">
 )HTML";
 
 const char LANMQTT_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form>
-<p style="font-size:13px;color:#888;margin:8px 0 0">把状态发布到局域网 MQTT 服务器（Home Assistant / Node-RED 等），topic 是 <code>前缀 + state</code>，服务器掉线检测用 <code>前缀 + availability</code>。连接情况看下面日志。</p></div>
+<p style="font-size:13px;color:#888;margin:8px 0 0">把状态发布到局域网 MQTT 服务器：<code>前缀 + 设备ID/state</code> 是状态，<code>前缀 + 设备ID/availability</code> 是在线情况（设备ID 是 MAC 去掉冒号）。
+几台设备订阅 <code>前缀 + +/state</code> 就能一起收到。开了"允许远程控制"才接受 <code>前缀 + control</code> 上的命令（开始/结束、急停、点动、重启），局域网里能连上这个服务器的程序都能发，按需要开。
+密码不显示，留空表示不修改；用户名清空就不登录。</p></div>
 )HTML";
 
 const char PAGE_TAIL[] PROGMEM = R"HTML(<div class="btns" style="margin-top:10px"><button type="submit">保存</button></div></form></div>
@@ -125,7 +129,7 @@ function dot(v){return '<span class="dot'+(v?' on':'')+'"></span>'+(v?'有效':'
 function btn(p,pin,lv){return '<span class="dot'+(p?' on':'')+'"></span>'+(p?'按下':'松开')+' <span style="color:#888">（'+pin+' '+(lv?'高':'低')+'）</span>'}
 function cmd(c){fetch('/api/cmd?c='+c,{method:'POST'}).then(r=>r.json()).then(j=>{document.getElementById('msg').textContent=j.msg})}
 function upd(){fetch('/api/status').then(r=>r.json()).then(s=>{
-for(const k of ['state','motor','up','wifi','cloud','ver','mq','mp','me'])document.getElementById(k).textContent=s[k];
+for(const k of ['state','motor','up','wifi','cloud','ver','mq','mp','me','lq'])document.getElementById(k).textContent=s[k];
 document.getElementById('mac').textContent=s.mac||'-';
 for(const k of ['in','ready','lack','full'])document.getElementById(k).innerHTML=dot(s[k]);
 document.getElementById('bs').innerHTML=btn(s.bs,'GPIO0',s.g0);
@@ -200,13 +204,22 @@ void handleRoot() {
   lan += F("<label>启用<input type=\"checkbox\" name=\"enable\" value=\"1\" style=\"width:auto\"");
   if (gSettings.lanMqttEnable) lan += F(" checked");
   lan += F("></label><input type=\"hidden\" name=\"has_enable\" value=\"1\">\n");
+  lan += F("<label>允许远程控制<input type=\"checkbox\" name=\"control\" value=\"1\" style=\"width:auto\"");
+  if (gSettings.lanMqttControl) lan += F(" checked");
+  lan += F("></label>\n");
   lan += F("<label>IP<input class=\"wide\" name=\"ip\" placeholder=\"192.168.5.10\" value=\"");
   lan += gSettings.lanMqttIp;
   lan += F("\"></label>\n<label>端口<input type=\"number\" name=\"port\" min=\"1\" max=\"65535\" value=\"");
   lan += (unsigned int)gSettings.lanMqttPort;
   lan += F("\"></label>\n<label>topic 前缀<input class=\"wide\" name=\"topic\" placeholder=\"semiams/\" value=\"");
   lan += gSettings.lanMqttTopic;
-  lan += F("\"></label>\n");
+  lan += F("\"></label>\n<label>用户名<input class=\"wide\" name=\"user\" autocomplete=\"off\" value=\"");
+  lan += gSettings.lanMqttUser;
+  lan += F("\"></label>\n<label>密码<input class=\"wide\" type=\"password\" name=\"pass\" autocomplete=\"new-password\" placeholder=\"");
+  lan += gSettings.lanMqttPass[0] ? F("已设置") : F("不需要就留空");
+  lan += F("\"></label>\n<p style=\"font-size:13px;color:#888;margin:4px 0 0\">本机状态 topic：<code>");
+  lan += lanmqtt::topicText();
+  lan += F("</code></p>\n");
 
   server.chunkedResponseModeStart(200, "text/html; charset=utf-8");
   server.sendContent_P(PAGE_HEAD);
@@ -388,13 +401,22 @@ void handleLanMqtt() {
   if (!settingsSetLanMqttIp(ip.c_str())) bad = true;
   if (port.length() && !settingsSetLanMqttPort(port.toInt())) bad = true;
   if (!settingsSetLanMqttTopic(topic.c_str())) bad = true;
-  if (server.hasArg("has_enable")) gSettings.lanMqttEnable = server.arg("enable") == "1";
+  String user = server.arg("user"), pass = server.arg("pass");
+  user.trim();
+  if (!settingsSetLanMqttUser(user.c_str())) bad = true;
+  if (pass.length() && !settingsSetLanMqttPass(pass.c_str())) bad = true;  // 留空 = 不修改
+  if (server.hasArg("has_enable")) {
+    gSettings.lanMqttEnable = server.arg("enable") == "1";
+    gSettings.lanMqttControl = server.arg("control") == "1";
+  }
   settingsSave();
   lanmqtt::applySettings();  // 断开旧连接，按新设置重连
-  LOG("网页：局域网 MQTT 设置已保存（" SEMI_PS "，%s:%u，前缀 %s）" SEMI_PS,
+  LOG("网页：局域网 MQTT 设置已保存（" SEMI_PS "，%s:%u，前缀 %s，" SEMI_PS "，" SEMI_PS "）" SEMI_PS,
       gSettings.lanMqttEnable ? PSTR("已启用") : PSTR("未启用"), gSettings.lanMqttIp,
       (unsigned)gSettings.lanMqttPort, gSettings.lanMqttTopic,
-      bad ? PSTR("，有格式不对的项未修改") : "");
+      gSettings.lanMqttUser[0] ? PSTR("登录") : PSTR("不登录"),
+      gSettings.lanMqttControl ? PSTR("允许远程控制") : PSTR("不接受远程控制"),
+      bad ? PSTR("，有格式不对的项未修改") : PSTR(""));
   server.sendHeader("Location", "/");
   server.send(303);
 }

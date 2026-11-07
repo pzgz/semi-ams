@@ -616,6 +616,7 @@ static void test_motor_logic() {
 }
 
 #include "test_printer.inc"
+#include "test_lanmqtt.inc"
 
 int main(int argc, char** argv) {
   g_verbose = argc > 1 && std::strcmp(argv[1], "-v") == 0;
@@ -663,6 +664,11 @@ int main(int argc, char** argv) {
   test_bambu_pull_out_8003();
   test_emergency_button_60ms();
   test_debouncer_blip();
+  test_lan_prefix();
+  test_lan_device_id();
+  test_lan_parse_control();
+  test_mqtt_connect_will();
+  test_mqtt_reader_retained();
   std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
   return g_fail ? 1 : 0;
 }

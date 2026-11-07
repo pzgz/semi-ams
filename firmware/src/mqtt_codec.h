@@ -52,27 +52,6 @@ inline size_t finish(uint8_t* buf, uint8_t header, size_t bodyLen) {
 }
 }  // namespace detail
 
-inline size_t buildConnect(uint8_t* buf, size_t cap, const char* clientId, const char* user, const char* pass,
-                           uint16_t keepAliveS) {
-  const size_t lc = strlen(clientId), lu = user ? strlen(user) : 0, lp = pass ? strlen(pass) : 0;
-  const size_t body = 10 + 2 + lc + (user ? 2 + lu : 0) + (pass ? 2 + lp : 0);
-  if (body + 5 > cap) return 0;
-  uint8_t* p = buf + 5;
-  const uint8_t proto[] = {0, 4, 'M', 'Q', 'T', 'T', 4};
-  memcpy(p, proto, sizeof(proto));
-  p += sizeof(proto);
-  uint8_t flags = 0x02;  // clean session
-  if (user) flags |= 0x80;
-  if (pass) flags |= 0x40;
-  *p++ = flags;
-  *p++ = (uint8_t)(keepAliveS >> 8);
-  *p++ = (uint8_t)keepAliveS;
-  p += detail::putStr(p, clientId, lc);
-  if (user) p += detail::putStr(p, user, lu);
-  if (pass) p += detail::putStr(p, pass, lp);
-  return detail::finish(buf, CONNECT << 4, body);
-}
-
 // 带遗嘱（Last Will）的 CONNECT：服务器发现客户端异常断开时，代它发布 willMsg 到 willTopic。
 // 局域网 MQTT 用它发布 online/offline，掉电时服务器会自动把 availability 改成 offline
 inline size_t buildConnectWill(uint8_t* buf, size_t cap, const char* clientId, const char* user, const char* pass,
@@ -102,6 +81,12 @@ inline size_t buildConnectWill(uint8_t* buf, size_t cap, const char* clientId, c
   if (user) p += detail::putStr(p, user, lu);
   if (pass) p += detail::putStr(p, pass, lp);
   return detail::finish(buf, CONNECT << 4, body);
+}
+
+// 不带遗嘱的 CONNECT（连接拓竹打印机用）
+inline size_t buildConnect(uint8_t* buf, size_t cap, const char* clientId, const char* user, const char* pass,
+                           uint16_t keepAliveS) {
+  return buildConnectWill(buf, cap, clientId, user, pass, keepAliveS, nullptr, nullptr, false);
 }
 
 inline size_t buildSubscribe(uint8_t* buf, size_t cap, uint16_t packetId, const char* topic, uint8_t qos) {
@@ -176,6 +161,9 @@ class Reader {
   bool error() const { return error_; }
   // 在回调里断开连接后调用：本次 feed 剩下的数据不再处理
   void stop() { stopped_ = true; }
+  // 当前这条 PUBLISH 是否带保留标志（在 onPublishBegin / onPublishData / onPublishEnd 里调用）。
+  // 服务器因为新订阅补发保留消息时才置这个标志，正常转发的消息不带（MQTT 3.1.1 第 3.3.1.3 节）
+  bool retained() const { return type_ == PUBLISH && (flags_ & 0x01); }
 
   // 输入一段数据，返回处理的字节数（出错时停止）
   size_t feed(const uint8_t* d, size_t n) {

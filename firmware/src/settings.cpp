@@ -1,6 +1,8 @@
 #include "settings.h"
 
 #include <LittleFS.h>
+
+#include "lanmqtt_proto.h"
 #include <pgmspace.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -143,27 +145,35 @@ bool settingsSetLanMqttPort(long p) {
   return true;
 }
 
-// topic 前缀：只拒绝 MQTT 通配符（+ #）和空白、控制字符，中文等 UTF-8 允许。
-// 结尾统一补 /，否则拼出来会变成 semiamsstate
+// topic 前缀：规则见 semi::lan::normalizePrefix（可以在电脑上测试）
 bool settingsSetLanMqttTopic(const char* v) {
-  if (!v) return false;
-  if (!*v) {  // 留空 = 恢复默认
-    strlcpy(gSettings.lanMqttTopic, "semiams/", sizeof(gSettings.lanMqttTopic));
-    return true;
-  }
+  return semi::lan::normalizePrefix(v, gSettings.lanMqttTopic, sizeof(gSettings.lanMqttTopic));
+}
+
+// 用户名和密码只允许可打印 ASCII：要写进 settings.txt 的一行里，用户名还要回填到网页
+static bool printableAscii(const char* v, size_t maxLen, const char* reject) {
   const size_t n = strlen(v);
-  if (n > sizeof(gSettings.lanMqttTopic) - 2) return false;
+  if (n > maxLen) return false;
+  if (n && (v[0] == ' ' || v[n - 1] == ' ')) return false;  // 读文件时会去掉首尾空白
   for (size_t i = 0; i < n; i++) {
     const unsigned char c = (unsigned char)v[i];
-    if (c == '+' || c == '#' || c == ' ' || c < 0x20 || c == 0x7f) return false;
+    if (c < 0x20 || c > 0x7e || (reject && strchr(reject, c))) return false;
   }
-  char buf[sizeof(gSettings.lanMqttTopic)];
-  strlcpy(buf, v, sizeof(buf));
-  if (buf[n - 1] != '/') {
-    buf[n] = '/';
-    buf[n + 1] = 0;
-  }
-  strlcpy(gSettings.lanMqttTopic, buf, sizeof(gSettings.lanMqttTopic));
+  return true;
+}
+
+bool settingsSetLanMqttUser(const char* v) {
+  if (!v) v = "";
+  if (!printableAscii(v, sizeof(gSettings.lanMqttUser) - 1, "\"'<>&\\")) return false;
+  strlcpy(gSettings.lanMqttUser, v, sizeof(gSettings.lanMqttUser));
+  if (!*v) gSettings.lanMqttPass[0] = 0;  // 不认证时密码也没有意义
+  return true;
+}
+
+bool settingsSetLanMqttPass(const char* v) {
+  if (!v) v = "";
+  if (!printableAscii(v, sizeof(gSettings.lanMqttPass) - 1, nullptr)) return false;
+  strlcpy(gSettings.lanMqttPass, v, sizeof(gSettings.lanMqttPass));
   return true;
 }
 
@@ -241,6 +251,9 @@ bool settingsBegin() {
     else if (k == "lan_mqtt_ip") settingsSetLanMqttIp(v.c_str());
     else if (k == "lan_mqtt_port") settingsSetLanMqttPort(v.toInt());
     else if (k == "lan_mqtt_topic") settingsSetLanMqttTopic(v.c_str());
+    else if (k == "lan_mqtt_user") settingsSetLanMqttUser(v.c_str());
+    else if (k == "lan_mqtt_pass") settingsSetLanMqttPass(v.c_str());
+    else if (k == "lan_mqtt_control") gSettings.lanMqttControl = v.toInt() != 0;
     else settingsSet(k.c_str(), v.toInt());
   }
   f.close();
@@ -263,6 +276,8 @@ bool settingsSave() {
   f.printf("mqtt_auto_load=%d\nmqtt_auto_unload=%d\n", gSettings.mqttAutoLoad ? 1 : 0, gSettings.mqttAutoUnload ? 1 : 0);
   f.printf("lan_mqtt_enable=%d\nlan_mqtt_ip=%s\nlan_mqtt_port=%u\nlan_mqtt_topic=%s\n", gSettings.lanMqttEnable ? 1 : 0,
            gSettings.lanMqttIp, (unsigned)gSettings.lanMqttPort, gSettings.lanMqttTopic);
+  f.printf("lan_mqtt_user=%s\nlan_mqtt_pass=%s\nlan_mqtt_control=%d\n", gSettings.lanMqttUser, gSettings.lanMqttPass,
+           gSettings.lanMqttControl ? 1 : 0);
   f.close();
   return true;
 }
