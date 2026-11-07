@@ -274,10 +274,12 @@ bool settingsSave() {
            gSettings.mqttEnable ? 1 : 0, gSettings.mqttIp, gSettings.mqttSn, gSettings.mqttCode,
            (unsigned)gSettings.mqttUnloadWaitS);
   f.printf("mqtt_auto_load=%d\nmqtt_auto_unload=%d\n", gSettings.mqttAutoLoad ? 1 : 0, gSettings.mqttAutoUnload ? 1 : 0);
-  f.printf("lan_mqtt_enable=%d\nlan_mqtt_ip=%s\nlan_mqtt_port=%u\nlan_mqtt_topic=%s\n", gSettings.lanMqttEnable ? 1 : 0,
-           gSettings.lanMqttIp, (unsigned)gSettings.lanMqttPort, gSettings.lanMqttTopic);
-  f.printf("lan_mqtt_user=%s\nlan_mqtt_pass=%s\nlan_mqtt_control=%d\n", gSettings.lanMqttUser, gSettings.lanMqttPass,
-           gSettings.lanMqttControl ? 1 : 0);
+  // 格式串放在 Flash 里（printf_P），省内存
+  f.printf_P(PSTR("lan_mqtt_enable=%d\nlan_mqtt_ip=%s\nlan_mqtt_port=%u\nlan_mqtt_topic=%s\n"),
+             gSettings.lanMqttEnable ? 1 : 0, gSettings.lanMqttIp, (unsigned)gSettings.lanMqttPort,
+             gSettings.lanMqttTopic);
+  f.printf_P(PSTR("lan_mqtt_user=%s\nlan_mqtt_pass=%s\nlan_mqtt_control=%d\n"), gSettings.lanMqttUser,
+             gSettings.lanMqttPass, gSettings.lanMqttControl ? 1 : 0);
   f.close();
   return true;
 }
