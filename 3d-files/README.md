@@ -4,6 +4,12 @@
 
 原厂的打印件在本机 Synology Drive 的 `3D打印/20260819_semi-ams/`（`SEMI-AMS-main-body.stl`、`SEMI-AMS直.3mf`、`SEMI-AMS直_stls/`、`ams架.stl` 等），只作参考；要改的话复制过来再改。
 
+## 现有零件
+
+| 文件夹 | 内容 |
+|---|---|
+| [`bracket/`](bracket/) | 卡座支架：代替原厂磁吸板，"[" 形卡住主体（六边形凸起插 B 孔 + 弹性下臂 + 磁铁），背后两种挂法：一体式直接挂 Sanja 3D P2S 增高架；或 Multiconnect 卡座 + 适配器（Sanja 增高架用这里的适配器，Multiboard / Skadis / openGrid / 墙面用现成的 Multiconnect 连接件） |
+
 ## 建议的放法
 
 每个零件一个文件夹：

@@ -8,7 +8,7 @@ SEMI-AMS 耗材进料器（拓竹打印机外置料盘的自动送料、缓冲�
 |---|---|---|
 | [`firmware/`](firmware/) | 进料器控制板（ESP-12S）的替换固件，PlatformIO 工程 | v1.2.3，已在拓竹 P2S 上实测 |
 | [`controller/`](controller/) | 主控 | 方案待定（ESP32 或纯软件），目前只是占位 |
-| [`3d-files/`](3d-files/) | 自己设计、修改的打印件（支架、外壳调整等） | 还没有文件 |
+| [`3d-files/`](3d-files/) | 自己设计、修改的打印件（支架、外壳调整等） | 卡座支架（一体式 Sanja 增高架版、Multiconnect 卡座 + 适配器）已出图，待试打 |
 
 ## 固件
 

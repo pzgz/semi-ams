@@ -3,4 +3,5 @@
 .DS_Store
 bambu_log_*.jsonl
 logs/
+__pycache__/
 .idea
