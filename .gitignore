@@ -5,3 +5,5 @@ bambu_log_*.jsonl
 logs/
 __pycache__/
 .idea
+dist/
+.workbuddy/
