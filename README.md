@@ -7,7 +7,7 @@ SEMI-AMS 耗材进料器（拓竹打印机外置料盘的自动送料、缓冲�
 | 目录 | 内容 | 状态 |
 |---|---|---|
 | [`firmware/`](firmware/) | 进料器控制板（ESP-12S）的替换固件，PlatformIO 工程 | v1.3.0，已在拓竹 P2S 上实测 |
-| [`controller/`](controller/) | 主控 | 方案待定（ESP32 或纯软件），目前只是占位 |
+| [`controller/`](controller/) | 控制端（ESP32-C3）：进料器的群控网页，**内置 MQTT 服务端**（兼容 3.1/3.1.1/5.0） | 已上板实测（含 MQTT 端到端自测） |
 | [`3d-files/`](3d-files/) | 自己设计、修改的打印件（支架、外壳调整等） | 卡座支架（一体式 Sanja 增高架版、Multiconnect 卡座 + 适配器）已出图，待试打 |
 
 ## 固件
@@ -21,6 +21,19 @@ pio run -e ota -t upload       # 无线升级（设备 IP 在 platformio.ini 的
 ```
 
 详细说明见 [firmware/README.md](firmware/README.md) 和 [firmware/docs/](firmware/docs/)。PlatformIO 命令都要在 `firmware/` 里执行；用 VS Code 的 PlatformIO 插件时，打开 `firmware/` 这个文件夹（`platformio.ini` 所在的目录），不要打开仓库根目录。
+
+## 控制端
+
+`controller/` 是 ESP32-C3 的群控端：**它自己就是 MQTT 服务端**，进料器直接连它的 IP，状态排成一张网页表，按钮单独控制某台。命令同样在 `controller/` 里执行：
+
+```bash
+cd controller
+bash host_test/run.sh          # 仿真测试（不需要开发板）
+pio run                        # 编译
+pio run -t upload              # 串口烧录
+```
+
+第一次用要配网：上电连不上 WiFi 时会开热点 `SEMI-AMS-CTRL`，连上去打开 <http://192.168.4.1> 填 WiFi。详见 [controller/README.md](controller/README.md)。
 
 ## 原厂资料
 
