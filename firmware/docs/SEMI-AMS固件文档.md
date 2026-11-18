@@ -105,7 +105,7 @@ DRV5032FA 的输出是电平，没有记忆：每 50ms 采样一次，只要磁�
 - **状态机**：状态有 `NO_MATERIAL`、`MATERIAL_LOADING`、`MATERIAL_READY`、`PRINTING`、`EMERGENCY_STOPPED`。事件有 `MATERIAL_IN/OUT/READY/UNREADY/FULL/LACK`、`PRINTER_START/STOP`、`EMERGENCY_STOP/RESUME`。
 - **中文显示名**：无耗材、耗材吸入中、耗材就绪、打印中、紧急停止。
 - **就绪开关兜底**：日志里有 `Ready Check Failed! Use Full Check instead.`，即就绪开关没触发时用 FULL 霍尔判断就绪。
-- **配网**：使用 AsyncWiFiManager，热点名 `SEMI-AMS`，自定义字段 `Blinker Secret`。
+- **配网**：使用 AsyncWiFiManager，热点名 `SEMI-AMS-<4 位后缀>`（后缀由 MAC 派生，每台唯一，如 `SEMI-AMS-CE08`），自定义字段 `Blinker Secret`。
 - **点灯控件 key**：`btn-start-stop`、`btn-emergency`、`btn-restart`、`btn-mqtt`、`tex-state`、`tex-motor`、`tex-runtime`、`tex-ip`、`num-rssi`，运行时长格式为 `x天x时x分`。
 
 ---
@@ -126,7 +126,7 @@ DRV5032FA 的输出是电平，没有记忆：每 50ms 采样一次，只要磁�
 | F7 | 长按任意键重启 | 按住 3 秒，蓝灯急闪后松开即重启 |
 | F8 | 每 7 天自动重启 | 运行满 7 天且处于空闲状态时执行 |
 | F9 | 联网远程控制 | 点灯 Blinker，沿用原厂 App 界面配置 |
-| F10 | 配网 | `SEMI-AMS` 热点，填写 WiFi 和 Blinker 密钥。蓝灯慢闪 = 连接中，快闪 = 配网中，常亮 = 已连接 |
+| F10 | 配网 | `SEMI-AMS-xxxx` 热点，填写 WiFi 和 Blinker 密钥。蓝灯慢闪 = 连接中，快闪 = 配网中，常亮 = 已连接 |
 | F11 | 拓竹打印机联动（MQTT） | 打印机用外置料盘开始打印时自动送料；在打印机上退料后，等打印机把耗材退出来再自动退料。打印前后只需要操作打印机。见 4.10 节 |
 | F12 | 局域网 MQTT（可选） | 把状态发布到局域网里的 MQTT 服务器（Home Assistant、Node-RED、以后的群控程序）；勾选"允许远程控制"后接受开始/结束、急停、点动、重启命令。见 4.6 节和 [局域网MQTT消息参考](局域网MQTT消息参考.md) |
 | — | TPU 助力 | **本期不做** |
@@ -326,7 +326,7 @@ DRV8870 真值表：
 ```mermaid
 flowchart TD
   S["上电"] --> Q{"保存过 WiFi?"}
-  Q -- "否" --> P1["开 SEMI-AMS 热点<br/>不限时 · 蓝灯快闪"]
+  Q -- "否" --> P1["开 SEMI-AMS-xxxx 热点<br/>不限时 · 蓝灯快闪"]
   Q -- "是" --> C["连接 15 秒<br/>蓝灯慢闪"]
   C -- "成功" --> ON["已连接 · 蓝灯常亮<br/>启动点灯 / 网页 / OTA"]
   C -- "失败" --> OFF["后台重连 · 蓝灯慢闪"]
@@ -343,8 +343,8 @@ flowchart TD
   - App 打开或发送心跳时，刷新全部控件。
   - 状态变化时主动推送，最小间隔 1.5 秒，多次变化合并成一条，以满足点灯"设备每秒最多 1 条"的限制。
   - 点灯库在 ESP8266 上默认不使用 SSL（`BLINKER_WITHOUT_SSL`），这样内存占用小、阻塞时间短。
-  - 点灯库的 `begin()` 会重新连接一次 WiFi，并把 DHCP 主机名改掉，固件随后会把主机名改回 `semi-ams`。
-- **mDNS**：点灯库会用它自己的设备名注册 mDNS。所以设置了点灯密钥后，网页和 OTA 请用 IP 访问；没设置时可以用 `semi-ams.local`。
+  - 点灯库的 `begin()` 会重新连接一次 WiFi，并把 DHCP 主机名改掉，固件随后会把主机名改回 `semi-ams-xxxx`（`deviceHost()`）。
+- **mDNS**：主机名是 `semi-ams-<4 位十六进制>`，后缀由本机 MAC 派生（如 `semi-ams-ce08`），每台唯一且固定，多台同型号不会撞名。点灯库会用它自己的设备名注册 mDNS，所以设置了点灯密钥后，网页和 OTA 请用 IP 访问。
 - **设备网页**：`http://设备IP/`。可以查看状态、传感器和日志，执行开始/急停/点动/重启，修改参数，重置配网，以及打开升级入口。接口见 8.2 节。
 - **局域网 MQTT**（v1.3.0，可选，默认关）：把状态发布到局域网里的 MQTT 服务器，可选接受控制命令。每台发到自己的 topic（`<前缀><设备ID>/state`、`…/availability`，设备 ID 是 MAC 去掉冒号），payload 都带 ip 和 mac；控制命令几台共用 `<前缀>control`，按 payload 里的 mac 执行，服务器补发的保留消息不执行。连接时机和连接拓竹打印机一样：等点灯初始化完成、空闲内存够（至少 8000 字节）、电机停着时才连，固件升级时断开。消息格式见 [局域网MQTT消息参考](局域网MQTT消息参考.md)。
 - **固件升级**：
@@ -616,12 +616,12 @@ pio device monitor --port /dev/cu.wchusbserialXXXX   # 115200，Ctrl+C 退出
 [     0] 传感器 进料口:0 就绪:0 EMPTY:0 FULL:1
 [     0] 状态: 无耗材 -> 无耗材（上电）
 [     0] 尚未配网
-[     0] 配网模式：手机连接热点 SEMI-AMS ...
+[     0] 配网模式：手机连接热点 SEMI-AMS-CE08 ...
 ```
 
 ### 5.7 配网与点灯
 
-1. 手机连接 `SEMI-AMS` 热点，配置页会自动弹出；没弹出就手动打开 192.168.4.1。
+1. 手机连接 `SEMI-AMS-xxxx` 热点，配置页会自动弹出；没弹出就手动打开 192.168.4.1。
 2. 选择 WiFi，输入密码，在 Blinker Secret 一栏填点灯密钥，然后点 save。
 3. 蓝灯常亮表示已连上。串口里会打印设备 IP。
 4. 点灯 App 里的设置和原厂教程一样：添加独立设备，选网络接入，在界面配置里粘贴 `app控制界面配置.txt` 的内容（全文见 8.3 节）。
@@ -803,7 +803,7 @@ v1.2.0 起固件按 2MB 分区，这块板可以无线升级。开机日志的"�
 | 蓝灯 | 含义 |
 |---|---|
 | 慢闪（1 秒） | 正在连接 WiFi，或在后台重连 |
-| 快闪（0.2 秒） | 配网热点 SEMI-AMS 已打开 |
+| 快闪（0.2 秒） | 配网热点 SEMI-AMS-xxxx 已打开 |
 | 常亮 | WiFi 已连接 |
 | 急闪 | 长按已满 3 秒，松开即重启 |
 | 双闪（亮两下、停一下） | 紧急停止中，按红色按钮解除（v1.2.3） |

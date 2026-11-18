@@ -35,6 +35,43 @@ uint32_t gLastRetry = 0;
 uint32_t gOfflineSince = 0;
 const char* apPass() { return AP_PASSWORD[0] ? AP_PASSWORD : nullptr; }
 
+// MAC 派生的 4 位十六进制后缀（FNV-1a 哈希取低 16 位）。
+// 同一份固件刷到多台设备也不会撞名，而 MAC 是出厂固定的，所以后缀永久稳定。
+// 必须在 WiFi.mode() 之后调用，否则读到的 MAC 还是全 0。
+const char* macSuffix() {
+  static char suf[8] = {0};
+  if (suf[0]) return suf;
+  uint8_t mac[6] = {0, 0, 0, 0, 0, 0};
+  WiFi.macAddress(mac);
+  uint32_t h = 2166136261u;
+  for (int i = 0; i < 6; ++i) {
+    h ^= mac[i];
+    h *= 16777619u;
+  }
+  snprintf(suf, sizeof(suf), "%04x", (unsigned)((h ^ (h >> 16)) & 0xFFFFu));
+  return suf;
+}
+
+// 主机名 = 前缀 + 后缀，例如 semi-ams-ce08
+const char* deviceHost() {
+  static char name[24] = {0};
+  if (!name[0]) snprintf(name, sizeof(name), "%s-%s", HOSTNAME_PREFIX, macSuffix());
+  return name;
+}
+
+// 配网热点名 = 前缀 + 同一后缀，例如 SEMI-AMS-CE08，
+// 两台同时进配网模式时手机上也能分清（SSID 最长 32 字节，这里 14 字节）
+const char* apName() {
+  static char name[24] = {0};
+  if (!name[0]) {
+    snprintf(name, sizeof(name), "%s-%s", AP_NAME, macSuffix());
+    for (char* p = name; *p; ++p) {  // SSID 统一大写，看着整齐
+      if (*p >= 'a' && *p <= 'z') *p -= ('a' - 'A');
+    }
+  }
+  return name;
+}
+
 void goOffline(const char* why) {
   gPhase = Phase::Offline;
   gOfflineSince = millis();
@@ -465,7 +502,7 @@ void startServices() {
   gOwnMdns = !gSettings.blinkerKey[0];
 
   // OTA（PlatformIO：pio run -e ota -t upload）
-  ArduinoOTA.setHostname(HOSTNAME);
+  ArduinoOTA.setHostname(deviceHost());
   ArduinoOTA.setPassword(OTA_PASSWORD);
   ArduinoOTA.onStart([]() { LOG("OTA 升级开始，电机已停止"); });
   ArduinoOTA.onError([](ota_error_t e) {
@@ -489,7 +526,7 @@ void startServices() {
 
   gServicesUp = true;
   if (gOwnMdns)
-    LOG("设备网页：http://%s/ 或 http://%s.local/", WiFi.localIP().toString().c_str(), HOSTNAME);
+    LOG("设备网页：http://%s/ 或 http://%s.local/", WiFi.localIP().toString().c_str(), deviceHost());
   else
     LOG("设备网页：http://%s/", WiFi.localIP().toString().c_str());
 }
@@ -502,11 +539,12 @@ void begin() {
   WiFi.persistent(true);
   WiFi.setAutoReconnect(true);
   WiFi.mode(WIFI_STA);
+  (void)macSuffix();  // 预热：mode 之后 MAC 才有效，先算一次把后缀缓存住
 
   const bool saved = wm.getWiFiIsSaved();
   wm.setDebugOutput(false);
   wm.setTitle(FW_NAME);
-  wm.setHostname(HOSTNAME);
+  wm.setHostname(deviceHost());
   wm.setConfigPortalBlocking(false);  // 配网时状态机照常工作
   wm.setConnectTimeout(WIFI_CONNECT_TIMEOUT_S);
   // 从没配过网：热点一直开着；配过网但暂时连不上（例如停电后路由器还没起来）：
@@ -523,13 +561,14 @@ void begin() {
   app::setNetLed(app::NetLed::Slow);
   if (saved) LOG("连接已保存的 WiFi...");
   else LOG("尚未配网");
-  if (wm.autoConnect(AP_NAME, apPass())) {
+  if (wm.autoConnect(apName(), apPass())) {
     gPhase = Phase::Online;
   } else if (saved) {
     goOffline(PSTR("暂时连不上 WiFi，后台重连中（3 分钟后仍连不上会打开 SEMI-AMS 配网热点）"));
   } else {
     gPhase = Phase::Portal;
-    LOG("配网模式：手机连接热点 %s，在弹出的页面（或 192.168.4.1）选择 WiFi 并填写点灯密钥", AP_NAME);
+    LOG("配网模式：手机连接热点 %s，在弹出的页面（或 192.168.4.1）选择 WiFi 并填写点灯密钥",
+        apName());
   }
 }
 
@@ -551,8 +590,8 @@ void loop() {
       } else if (millis() - gOfflineSince > OFFLINE_PORTAL_AFTER_S * 1000UL) {
         gPhase = Phase::Portal;
         wm.setEnableConfigPortal(true);
-        wm.startConfigPortal(AP_NAME, apPass());  // 非阻塞，PORTAL_TIMEOUT_S 后自动关闭
-        LOG("一直连不上 WiFi，打开配网热点 %s（%d 分钟）", AP_NAME, PORTAL_TIMEOUT_S / 60);
+        wm.startConfigPortal(apName(), apPass());  // 非阻塞，PORTAL_TIMEOUT_S 后自动关闭
+        LOG("一直连不上 WiFi，打开配网热点 %s（%d 分钟）", apName(), PORTAL_TIMEOUT_S / 60);
       } else if (millis() - gLastRetry > 60000) {
         gLastRetry = millis();
         WiFi.begin();
@@ -566,7 +605,7 @@ void loop() {
           // 点灯库的 begin() 会重新 WiFi.begin() 并把 DHCP 主机名改成 DiyArduinoMQTT_xxx，
           // 这里改回来，并直接返回，下一轮再重新读取连接状态
           cloud::begin(gSettings.blinkerKey);
-          WiFi.hostname(HOSTNAME);
+          WiFi.hostname(deviceHost());
           return;
         }
         LOG("未设置点灯密钥，不启用 Blinker（本地按键和网页照常可用）");

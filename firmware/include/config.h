@@ -3,7 +3,7 @@
 #pragma once
 
 #define FW_NAME    "SEMI-AMS"
-#define FW_VERSION "1.3.0"
+#define FW_VERSION "1.3.2"
 
 // ---------------- 引脚 ----------------
 #define PIN_HALL_EMPTY    12  // U11 EMPTY_CHECK（DRV5032FA 推挽），低电平 = 缓冲器空
@@ -18,9 +18,12 @@
 #define PIN_LED            2  // ESP-12S 板载蓝灯，低电平点亮
 
 // ---------------- 网络 ----------------
-#define AP_NAME        "SEMI-AMS"   // 配网热点名称
+#define AP_NAME        "SEMI-AMS"   // 配网热点前缀，实际是「前缀-后缀」，如 SEMI-AMS-CE08（见 net.cpp apName()）
 #define AP_PASSWORD    ""           // 配网热点密码（至少 8 位；留空 = 开放热点，和原厂一致）
-#define HOSTNAME       "semi-ams"   // http://semi-ams.local
+// 主机名前缀。实际名字是「前缀-MAC 派生的 4 位十六进制」，例如 semi-ams-64ca，
+// 每台设备唯一且固定（MAC 不变名字就不变），避免多台同型号撞名。
+// 见 net.cpp 里的 deviceHost()
+#define HOSTNAME_PREFIX "semi-ams"
 #define OTA_PASSWORD   "semi-ams"   // ArduinoOTA 和网页升级（用户名 admin）的密码，建议修改
 #define WIFI_CONNECT_TIMEOUT_S 15   // 上电连接已保存 WiFi 的等待时间
 #define OFFLINE_PORTAL_AFTER_S 180  // 已配过网但连不上：先后台重连这么久（等路由器启动），仍连不上再开配网热点
