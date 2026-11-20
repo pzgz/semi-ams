@@ -410,40 +410,48 @@ function txt(id, s) { el(id).textContent = s; }
 
 function renderPrinter(p) {
   const bars = el('prBarFill');
-  if (!p || !p.valid) {
+  // C3 侧不会自动清状态：桥接意外退出后 lastMs 就停在那一刻，age 一直涨。
+  // 超过 20 秒（≈4 个发布周期）就认为桥接已断开，清空实时数值，
+  // 只留机型/SN 和「最后一条数据是多少秒前」，免得僵死的「打印中 34%」冒充实时值。
+  const stale = !!p && p.valid && (p.age < 0 || p.age > 20);
+  if (!p || !p.valid || stale) {
     el('prDot').className = 'pdot';
-    el('prSrcChip').className = 'chip';
-    txt('prSrcChip', '未接入');
-    txt('prIdent', '');
-    el('prChip1').className = 'chip';    el('prChip1').textContent = '未接入';
-    el('prChip2').className = 'chip on';
-    txt('prMeta', '等待 PC 端推送（tools/bambu_bridge.py）');
-    txt('prTitle', '—');
+    el('prSrcChip').className = 'chip' + (stale ? ' on warn' : '');
+    txt('prSrcChip', stale ? '已断开' : '未接入');
+    txt('prIdent', stale ? [p.md, p.sn].filter(Boolean).join(' · ') : '');
+    el('prChip1').className = 'chip' + (stale ? ' on warn' : '');
+    el('prChip1').textContent = stale ? '已断开' : '未接入';
+    el('prChip2').className = 'chip';
+    txt('prChip2', '—');
+    txt('prMeta', stale
+      ? '最后数据 ' + fmtAge(p.age) + ' · 累计 ' + p.reports + ' 条 · 检查 PC 端桥接'
+      : '等待 PC 端推送');
+    txt('prTitle', stale ? '桥接已断开' : '—');
     bars.style.width = '0'; bars.className = '';
     txt('prBarText', '--');
     txt('prPct', '--'); txt('prLayer', '--'); txt('prRemain', '--');
     txt('prNozzle', '—'); txt('prBed', '—'); txt('prChamber', '—');
     ['prNozzleBar', 'prBedBar', 'prChamberBar'].forEach(i => { el(i).style.width = '0'; });
-    txt('prAmsNote', 'AMS 空闲');    txt('prAmsTitle', 'AMS'); txt('prAmsInfo', '—'); txt('prAmsNote2', '');
+    txt('prAmsNote', stale ? 'AMS 状态未知' : 'AMS 空闲');
+    txt('prAmsTitle', 'AMS'); txt('prAmsInfo', '—'); txt('prAmsNote2', '');
     el('prTrays').innerHTML = '';
     return;
   }
 
   const st = p.st || '';
   const idle = st === 'IDLE' || !st;
-  const stale = p.age < 0 || p.age > 20;
   const tone = PR_TONE[st] || '';
 
   el('prChip1').className = 'chip' + (idle ? '' : ' on ' + tone);
   el('prChip1').textContent = PR_ZH[st] || st || '—';
   el('prChip2').className = 'chip' + (idle ? ' on' : '');
 
-  // 顶栏：连接方式（本地/云端）+ 在线状态、型号 · SN
-  el('prDot').className = 'pdot ' + (stale ? '' : (st === 'FAILED' ? 'bad'
-                : st === 'PAUSE' ? 'warn' : st === 'RUNNING' ? 'blue' : 'on'));
+  // 顶栏：连接方式（本地/云端）+ 在线状态、型号 · SN（断开的情况上面已 return）
+  el('prDot').className = 'pdot ' + (st === 'FAILED' ? 'bad'
+                : st === 'PAUSE' ? 'warn' : st === 'RUNNING' ? 'blue' : 'on');
   const srcName = p.src === 'cloud' ? '云端' : (p.src === 'local' ? '本地' : '未知');
-  el('prSrcChip').className = 'chip on ' + (stale ? 'warn' : 'ok');
-  txt('prSrcChip', srcName + ' · ' + (stale ? '离线' : '在线'));
+  el('prSrcChip').className = 'chip on ok';
+  txt('prSrcChip', srcName + ' · 在线');
   txt('prIdent', [p.md, p.sn].filter(Boolean).join(' · '));
 
   const meta = [];
