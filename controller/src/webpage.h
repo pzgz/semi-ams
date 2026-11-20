@@ -94,6 +94,66 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 .form input[type=color]{width:56px;height:32px}
 .addfoot{display:flex;align-items:center;gap:12px;margin-top:16px}
 #addErr{color:#c0392b}
+/* ---- 打印机面板（深色）---- */
+.pr{background:#14161b;border:1px solid #23262e;border-radius:12px;color:#e7e9ee;
+    margin-bottom:16px;overflow:hidden}
+.pr .sec{padding:16px 18px}
+/* 顶栏：圆点 + 标题 + 连接方式 chip + 型号·SN */
+.pr .prhead{display:flex;align-items:center;gap:10px;padding:14px 18px;
+            border-bottom:1px solid #23262e}
+.pr .prhead b{font-size:15px;font-weight:600}
+.pr .pdot{width:8px;height:8px;border-radius:50%;background:#3a4050;flex:none
+          ;transition:background .3s}
+.pr .pdot.on{background:#2fbf5f}
+.pr .pdot.blue{background:#4c6ef5}
+.pr .pdot.warn{background:#e0a02a}
+.pr .pdot.bad{background:#d3524a}
+.pr .prident{margin-left:auto;font-size:12.5px;color:#7b8496;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .sec + .sec{border-top:1px solid #23262e}
+.pr .lbl{font-size:12.5px;color:#8b93a1;margin-bottom:10px}
+.pr .chips{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.pr .chip{font-size:13px;padding:5px 12px;border-radius:7px;background:#1c1f26;color:#7b8496;
+          border:1px solid #262a33}
+.pr .chip.on{background:#1b2444;color:#7ea6ff;border-color:#2a3a6b;font-weight:600}
+.pr .chip.on.ok{background:#16301f;color:#57d98a;border-color:#245036}
+.pr .chip.on.warn{background:#33280f;color:#e8b45e;border-color:#57431a}
+.pr .chip.on.bad{background:#33191a;color:#f08b82;border-color:#5a2a2a}
+.pr .prmeta{margin-left:auto;font-size:12px;color:#6f7787}
+.pr .title{font-size:19px;font-weight:600;line-height:1.35;margin:0 0 14px;
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .bar{height:22px;border-radius:5px;background:#22262e;position:relative;overflow:hidden}
+.pr .bar>i{display:block;height:100%;width:0;background:#2fbf5f;transition:width .3s}
+.pr .bar>i.warn{background:#e0a02a}
+.pr .bar>i.bad{background:#d3524a}
+.pr .bar>i.blue{background:#4c6ef5}
+.pr .bar>span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              font-size:12px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45)}
+.pr .stats{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px;
+           border:1px solid #23262e;border-radius:8px;overflow:hidden}
+.pr .stat{padding:12px 14px}
+.pr .stat + .stat{border-left:1px solid #23262e}
+.pr .stat .k{font-size:12px;color:#8b93a1;margin-bottom:4px}
+.pr .stat .v{font-size:22px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.pr .temps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.pr .t .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.pr .t .k{font-size:12.5px;color:#8b93a1}
+.pr .t .v{font-size:17px;font-weight:600}
+.pr .track{height:5px;border-radius:3px;background:#262a33;overflow:hidden}
+.pr .track>i{display:block;height:100%;width:0;background:#4c6ef5;transition:width .3s}
+.pr .track>i.hot{background:#e0704a}
+.pr .amsnote{text-align:center;font-size:12.5px;color:#8b93a1;margin-top:16px}
+.pr .amshd{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:#8b93a1}
+.pr .amshd b{font-size:14px;color:#e7e9ee;font-weight:600}
+.pr .dim{color:#5f6675}
+.pr .trays{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pr .tray{display:flex;gap:12px;align-items:center;background:#191c22;border:1px solid #23262e;
+          border-radius:8px;padding:12px 14px}
+.pr .tray.none{opacity:.42}
+.pr .sw{width:34px;height:34px;border-radius:6px;flex:none;border:1px solid rgba(255,255,255,.14)}
+.pr .ti{flex:1;min-width:0}
+.pr .ti b{display:block;font-size:13.5px;font-weight:600;margin-bottom:3px}
+.pr .ti small{display:block;font-size:12px;color:#8b93a1;margin-bottom:7px}
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
       background:#1f2329;color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;
       transition:all .22s;pointer-events:none;z-index:40;max-width:80vw}
@@ -110,9 +170,55 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 <div class="wrap">
   <header>
     <h1>SEMI-AMS 控制端</h1>
-    <small id="ver">v0.1</small>
+    <small id="ver">v0.2</small>
     <span class="pill" id="wifiPill"><i></i><span id="wifiText">--</span></span>
   </header>
+
+  <!-- 打印机面板：深色主面板 -->
+  <section class="pr">
+    <div class="prhead">
+      <i class="pdot" id="prDot"></i>
+      <b>拓竹打印监控</b>
+      <span class="chip" id="prSrcChip">未接入</span>
+      <span class="prident" id="prIdent"></span>
+    </div>
+    <div class="sec">
+      <div class="lbl">打印状态</div>
+      <div class="chips">
+        <span class="chip" id="prChip1">未接入</span>
+        <span class="chip" id="prChip2">空闲</span>
+        <span class="prmeta" id="prMeta"></span>
+      </div>
+      <div class="title" id="prTitle">等待 PC 端推送…</div>
+      <div class="bar" id="prBar"><i id="prBarFill"></i><span id="prBarText">--</span></div>
+      <div class="stats">
+        <div class="stat"><div class="k">进度</div><div class="v" id="prPct">--</div></div>
+        <div class="stat"><div class="k">层数</div><div class="v" id="prLayer">--</div></div>
+        <div class="stat"><div class="k">剩余时间</div><div class="v" id="prRemain">--</div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="lbl">温度</div>
+      <div class="temps">
+        <div class="t"><div class="row"><span class="k">喷嘴</span><span class="v" id="prNozzle">—</span></div>
+          <div class="track"><i id="prNozzleBar"></i></div></div>
+        <div class="t"><div class="row"><span class="k">热床</span><span class="v" id="prBed">—</span></div>
+          <div class="track"><i id="prBedBar"></i></div></div>
+        <div class="t"><div class="row"><span class="k">腔体</span><span class="v" id="prChamber">—</span></div>
+          <div class="track"><i id="prChamberBar"></i></div></div>
+      </div>
+      <div class="amsnote" id="prAmsNote">AMS 空闲</div>
+    </div>
+    <div class="sec">
+      <div class="lbl">AMS 料盘</div>
+      <div class="amshd">
+        <b id="prAmsTitle">AMS</b>
+        <span id="prAmsInfo">—</span>
+        <span class="dim" id="prAmsNote2"></span>
+      </div>
+      <div class="trays" id="prTrays"></div>
+    </div>
+  </section>
 
   <section class="card">
     <div class="cfg">
@@ -294,6 +400,135 @@ function fmtAge(s) {
 
 let last = null;
 
+// ---- 打印机面板：数据全部来自 PC 端桥接程序推的 MQTT 报文 ----
+const PR_ZH = {IDLE:'空闲', PREPARE:'准备中', SLICING:'切片中', RUNNING:'打印中',
+               PAUSE:'已暂停', FINISH:'已完成', FAILED:'已失败', OFFLINE:'离线'};
+const PR_TONE = {FINISH:'ok', RUNNING:'', PREPARE:'', SLICING:'', IDLE:'',
+                 PAUSE:'warn', FAILED:'bad', OFFLINE:'bad'};
+
+function txt(id, s) { el(id).textContent = s; }
+
+function renderPrinter(p) {
+  const bars = el('prBarFill');
+  if (!p || !p.valid) {
+    el('prDot').className = 'pdot';
+    el('prSrcChip').className = 'chip';
+    txt('prSrcChip', '未接入');
+    txt('prIdent', '');
+    el('prChip1').className = 'chip';    el('prChip1').textContent = '未接入';
+    el('prChip2').className = 'chip on';
+    txt('prMeta', '等待 PC 端推送（tools/bambu_bridge.py）');
+    txt('prTitle', '—');
+    bars.style.width = '0'; bars.className = '';
+    txt('prBarText', '--');
+    txt('prPct', '--'); txt('prLayer', '--'); txt('prRemain', '--');
+    txt('prNozzle', '—'); txt('prBed', '—'); txt('prChamber', '—');
+    ['prNozzleBar', 'prBedBar', 'prChamberBar'].forEach(i => { el(i).style.width = '0'; });
+    txt('prAmsNote', 'AMS 空闲');    txt('prAmsTitle', 'AMS'); txt('prAmsInfo', '—'); txt('prAmsNote2', '');
+    el('prTrays').innerHTML = '';
+    return;
+  }
+
+  const st = p.st || '';
+  const idle = st === 'IDLE' || !st;
+  const stale = p.age < 0 || p.age > 20;
+  const tone = PR_TONE[st] || '';
+
+  el('prChip1').className = 'chip' + (idle ? '' : ' on ' + tone);
+  el('prChip1').textContent = PR_ZH[st] || st || '—';
+  el('prChip2').className = 'chip' + (idle ? ' on' : '');
+
+  // 顶栏：连接方式（本地/云端）+ 在线状态、型号 · SN
+  el('prDot').className = 'pdot ' + (stale ? '' : (st === 'FAILED' ? 'bad'
+                : st === 'PAUSE' ? 'warn' : st === 'RUNNING' ? 'blue' : 'on'));
+  const srcName = p.src === 'cloud' ? '云端' : (p.src === 'local' ? '本地' : '未知');
+  el('prSrcChip').className = 'chip on ' + (stale ? 'warn' : 'ok');
+  txt('prSrcChip', srcName + ' · ' + (stale ? '离线' : '在线'));
+  txt('prIdent', [p.md, p.sn].filter(Boolean).join(' · '));
+
+  const meta = [];
+  if (p.age >= 0) meta.push('数据 ' + fmtAge(p.age));
+  meta.push('累计 ' + p.reports + ' 条');
+  if (p.er) meta.push('错误码 ' + p.er);
+  else if (p.hn) meta.push('HMS ' + (p.h1 || p.hn + ' 条'));
+  txt('prMeta', meta.join(' · '));
+
+  txt('prTitle', p.file || '（无任务）');
+
+  const pct = Math.max(0, Math.min(100, p.pct || 0));
+  bars.style.width = pct + '%';
+  bars.className = st === 'FAILED' ? 'bad' : (st === 'PAUSE' ? 'warn'
+                  : (st === 'RUNNING' ? 'blue' : ''));
+  txt('prBarText', pct + '%');
+
+  txt('prPct', pct + '%');
+  txt('prLayer', p.tly ? p.ly + '/' + p.tly : '--');
+  txt('prRemain', (st === 'RUNNING' || st === 'PAUSE') && p.rem > 0
+                  ? (p.rem >= 60 ? Math.floor(p.rem / 60) + ' 时 ' + (p.rem % 60) + ' 分'
+                                 : p.rem + ' 分钟')
+                  : '--');
+
+  // 温度：优先按「当前 / 目标」；没目标（空闲）时退回固定量程，这样条形不会一直空着
+  const setT = (vId, bId, cur, tgt, max) => {
+    txt(vId, cur ? cur + '°C' : '—');
+    const span = tgt > 0 ? tgt : max;
+    el(bId).style.width = (cur && span ? Math.min(100, cur / span * 100) : 0) + '%';
+    el(bId).className = cur >= 200 ? 'hot' : '';
+  };
+  setT('prNozzle', 'prNozzleBar', p.nz, p.nzt, 300);
+  setT('prBed', 'prBedBar', p.bd, p.bdt, 120);
+  setT('prChamber', 'prChamberBar', p.ch, 0, 60);  // 腔体没有目标值
+
+  const trays = p.trays || [];
+  // AMS 状态：tray_now 255=空闲 / 254=外挂料盘 / 0-3=正在用哪槽
+  const tn = (p.tn === undefined ? 255 : p.tn);
+  let amsText;
+  if (!trays.length) amsText = 'AMS 无料盘';
+  else if (tn === 254) amsText = '外挂料盘供料';
+  else if (tn >= 0 && tn < 4) amsText = 'AMS 使用中 · 槽位 ' + (tn + 1);
+  else amsText = 'AMS 空闲';
+  txt('prAmsNote', amsText);
+
+  txt('prAmsTitle', 'AMS' + (p.amsid ? ' ' + (Number(p.amsid) + 1) : ''));
+  const info = [];
+  info.push('湿度档位 ' + (p.amsh >= 0 ? p.amsh : '—'));
+  info.push('温度 ' + (p.amst >= 0 ? p.amst + '°C' : '—'));
+  txt('prAmsInfo', info.join(' · '));
+  txt('prAmsNote2', p.amsh >= 0 ? '（湿度为固件档位，非百分比）' : '');
+
+  const box = el('prTrays');
+  box.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const t = trays[i] || null;
+    const d = document.createElement('div');
+    d.className = 'tray' + (t ? '' : ' none');
+    const sw = document.createElement('div');
+    sw.className = 'sw';
+    sw.style.background = t && /^[0-9a-f]{6}$/i.test(t.color || '') ? '#' + t.color : '#2a2e37';
+    const ti = document.createElement('div');
+    ti.className = 'ti';
+    const b = document.createElement('b');
+    b.textContent = t ? ('槽位 ' + (i + 1) + ' · ' + (t.type || '空')) : '槽位 ' + (i + 1);
+    const small = document.createElement('small');
+    if (!t) small.textContent = '空槽位';
+    else if (t.remain >= 0) small.textContent = '余量 ' + t.remain + '%';
+    else small.textContent = '余量未知（非 RFID 卷）';
+    ti.appendChild(b);
+    ti.appendChild(small);
+    if (t && t.remain >= 0) {
+      const tr = document.createElement('div');
+      tr.className = 'track';
+      const fi = document.createElement('i');
+      fi.style.width = Math.min(100, t.remain) + '%';
+      tr.appendChild(fi);
+      ti.appendChild(tr);
+    }
+    d.appendChild(sw);
+    d.appendChild(ti);
+    box.appendChild(d);
+  }
+}
+
 function render(j) {
   last = j;
   if (firstLoad) {
@@ -310,6 +545,7 @@ function render(j) {
   setPill('wifiPill', 'wifiText', j.wifi.ip ? 'ok' : 'bad',
           j.wifi.ip ? ('本机 ' + j.wifi.ip + ' · ' + j.wifi.rssi + ' dBm') : 'WiFi 未连接');
   el('devHint').textContent = '共 ' + j.devices_used + ' 台 · 在线 ' + j.devices_online + ' 台';
+  renderPrinter(j.printer);
   syncRows(j.devices.length);
 
   j.devices.forEach((d, i) => {

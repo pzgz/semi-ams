@@ -6,6 +6,7 @@
 #include <new>  // std::nothrow
 
 #include "devices.h"
+#include "prstate.h"
 #include "settings.h"
 #include "topic.h"
 
@@ -740,6 +741,9 @@ void Broker::onPublish(int i) {
     devicesOnState(gPayload);
   } else if (endsWith(topic, "/availability")) {
     devicesOnAvailability(gPayload);
+  } else if (endsWith(topic, "/printer")) {
+    // PC 端桥接程序推过来的拓竹打印机状态（C3 自己不做 TLS）
+    printerOnState(gPayload);
   }
 
   deliver(topic, gPayload, plen, false);

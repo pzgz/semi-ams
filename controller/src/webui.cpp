@@ -8,6 +8,7 @@
 #include "config.h"
 #include "devices.h"
 #include "jsonmac.h"
+#include "prstate.h"
 #include "settings.h"
 #include "webpage.h"
 
@@ -44,7 +45,7 @@ String selfIp() {
 
 String stateJson() {
   String s;
-  s.reserve(2800);
+  s.reserve(3400);
   char buf[128];
 
   s += "{\"ip\":\"";
@@ -119,7 +120,63 @@ String stateJson() {
     s += esc(d.material);
     s += "\"}";
   }
-  s += "]}";
+  s += "],";
+
+  // ---- 打印机（由 PC 端桥接程序 MQTT 推过来）----
+  PrinterState pr;
+  printerCopy(pr);
+  const uint32_t age = printerAge();
+  s += "\"printer\":{\"valid\":";
+  s += pr.valid ? "true" : "false";
+  // 这一段比 buf[128] 长，单独开个大缓冲，否则 snprintf 截断会把最后一个数值吃掉
+  char pbuf[192];
+  snprintf(pbuf, sizeof(pbuf),
+           ",\"age\":%ld,\"reports\":%lu,\"pct\":%d,\"ly\":%d,\"tly\":%d,\"rem\":%d,"
+           "\"nz\":%d,\"nzt\":%d,\"bd\":%d,\"bdt\":%d,\"ch\":%d,\"wf\":%d,\"spd\":%d,"
+           "\"er\":%d,\"hn\":%d",
+           age == 0xFFFFFFFFu ? -1L : (long)(age / 1000), (unsigned long)pr.reports, pr.pct,
+           pr.layer, pr.total, pr.remainMin, pr.nozzle, pr.nozzleTarget, pr.bed, pr.bedTarget,
+           pr.chamber, pr.wifi, pr.spd, pr.err, pr.hmsCount);
+  s += pbuf;
+  s += ",\"st\":\"";
+  s += esc(pr.st);
+  s += "\",\"md\":\"";
+  s += esc(pr.model);
+  s += "\",\"sn\":\"";
+  s += esc(pr.sn);
+  s += "\",\"src\":\"";
+  s += esc(pr.src);
+  s += "\",\"amsid\":\"";
+  s += esc(pr.amsId);
+  snprintf(buf, sizeof(buf), "\",\"amsh\":%d,\"amst\":%d,\"tn\":%d,\"h1\":\"",
+           pr.amsHum, pr.amsTemp, pr.trayNow);
+  s += buf;
+  s += esc(pr.hms1);
+  s += "\",\"file\":\"";
+  s += esc(pr.file);
+  s += "\",\"trays\":[";
+  for (int i = 0; i < pr.trayCount; ++i) {
+    if (i) s += ",";
+    s += "{\"type\":\"";
+    s += esc(pr.tray[i].type);
+    s += "\",\"color\":\"";
+    s += esc(pr.tray[i].color);
+    s += "\",\"remain\":";
+    s += pr.tray[i].remain;
+    s += "}";
+  }
+  s += "],\"vt\":";
+  if (pr.hasVt) {
+    s += "{\"type\":\"";
+    s += esc(pr.vtType);
+    s += "\",\"color\":\"";
+    s += esc(pr.vtColor);
+    s += "\"}";
+  } else {
+    s += "null";
+  }
+  s += "}";  // printer 结束
+  s += "}";  // 根对象结束
   return s;
 }
 

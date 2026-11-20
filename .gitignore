@@ -7,3 +7,7 @@ __pycache__/
 .idea
 dist/
 .workbuddy/
+
+# 本地环境相关，不进仓库（含设备 IP / 账号 / 访问码）
+*.local.ini
+bambu_token.json
