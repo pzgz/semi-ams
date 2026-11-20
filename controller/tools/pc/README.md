@@ -74,7 +74,8 @@ python3 controller/tools/pc/bambu_bridge.py \
 | `--region` | 空 | `cn` / `intl`，云端账号区域 |
 | `--interval` | `5` | 发布间隔秒；状态有变化会立刻发，不等间隔 |
 | `--once` | — | 发一条就退出（验证用） |
-| `--dry-run` | — | 只打印 payload，不发给 C3 |
+| `--cmd` | — | `load` / `unload` / `pause` / `resume` / `stop`，只发这一条命令就退出（调试协议用，不需要 C3） |
+| `--dry-run` | — | 只打印 payload，不发给 C3，也不真发给打印机 |
 | `-v` | — | 每次发布打印完整 JSON |
 
 ### 常用组合
@@ -88,6 +89,41 @@ python3 controller/tools/pc/bambu_bridge.py --broker 192.168.1.100:1883 --source
 
 # 发到别的 C3 / 别的主题
 python3 controller/tools/pc/bambu_bridge.py --broker 192.168.1.101:1883 --topic myams/printer
+```
+
+### 网页上的控制按钮
+
+常驻运行时桥接会额外订阅 `semiams/printer/cmd`，C3 网页上的按钮就是往这里发
+`{"c":"pause"}` / `"resume"` / `"stop"` / `"load"` / `"unload"`。进退料翻成拓竹的
+`ams_change_filament`，打印控制翻成 `pause` / `resume` / `stop`：
+
+```json
+// load → slot_id/target = 254（外挂），unload → 255（退掉当前那一路）
+{"print":{"command":"ams_change_filament","ams_id":0,"slot_id":254,"target":254,
+          "curr_temp":-1,"tar_temp":-1,"soft_temp":0}}
+// 暂停 / 继续 / 停止：共用同一个形状
+{"print":{"command":"pause","param":""}}
+{"print":{"command":"resume","param":""}}
+{"print":{"command":"stop","param":""}}
+```
+
+只认这五个词，其它一律丢弃。时机检查两边都做（C3 和桥接各拦一次），
+每个动作只有一个合法状态：
+
+| 动作 | 要求 `gcode_state` |
+|---|---|
+| `pause` | `RUNNING` |
+| `resume` | `PAUSE` |
+| `stop` | `RUNNING` / `PAUSE` / `PREPARE` |
+| `load` / `unload` | 空闲（不能是上面三个） |
+
+**注意**：这是 qos0，打印机忙推状态时可能漏收，所以桥接只保证「已下发」，
+真实结果看 `gcode_state`、`tray_now` 和喷嘴温度。想脱离 C3 单测协议：
+
+```bash
+python3 controller/tools/pc/bambu_bridge.py --source local --ip 192.168.1.50 --cmd unload
+# 只打印要发的报文、不真发给打印机：
+python3 controller/tools/pc/bambu_bridge.py --source local --ip 192.168.1.50 --cmd stop --dry-run
 ```
 
 ### 访问码从哪来

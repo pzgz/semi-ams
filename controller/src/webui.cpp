@@ -334,6 +334,59 @@ void handleControl() {
   sendJson(200, "{\"ok\":true,\"sent\":" + String(sent) + "}");
 }
 
+// 打印机进退料：网页按钮 → 本机 broker 发布 <prefix>printer/cmd → PC 桥接转给打印机。
+// C3 自己不碰 TLS，这条命令也只是个转发，真实动作在桥接那边做。
+void handlePrinterCmd() {
+  const String c = server.arg("c");
+  if (c != "load" && c != "unload" && c != "pause" && c != "resume" && c != "stop") {
+    sendErr(400, "不认识的动作");
+    return;
+  }
+  PrinterState p;
+  printerCopy(p);
+  // 桥接不在线就别假装发了：命令只会掉进空里
+  if (!p.valid || printerAge() > 20000) {
+    sendErr(409, "PC 桥接不在线，命令没有发出去");
+    return;
+  }
+  const String st(p.st);
+  const bool printing = (st == "RUNNING" || st == "PAUSE" || st == "PREPARE");
+  // 每个动作都有自己唯一合法的状态窗口，超出就是 409
+  if (c == "load" || c == "unload") {
+    if (printing) {
+      sendErr(409, "打印机正在" + st + "，先停下再进退料");
+      return;
+    }
+  } else if (c == "pause") {
+    if (st != "RUNNING") {
+      sendErr(409, "打印机当前是" + st + "，只有打印中才能暂停");
+      return;
+    }
+  } else if (c == "resume") {
+    if (st != "PAUSE") {
+      sendErr(409, "打印机当前是" + st + "，只有暂停中才能继续");
+      return;
+    }
+  } else if (!printing) {  // stop
+    sendErr(409, "打印机没在打印（当前 " + st + "），不用停止");
+    return;
+  }
+
+  char topic[MQTT_TOPIC_MAX];
+  snprintf(topic, sizeof(topic), "%sprinter/cmd", gSettings.prefix);
+  char payload[32];
+  snprintf(payload, sizeof(payload), "{\"c\":\"%s\"}", c.c_str());
+
+  String err;
+  int sent = 0;
+  if (!gBroker.publish(topic, payload, strlen(payload), false, err, &sent)) {
+    sendErr(503, err);
+    return;
+  }
+  Serial.printf("[网页] 打印机命令 %s 已下发（%d 台桥接）\n", c.c_str(), sent);
+  sendJson(200, "{\"ok\":true,\"sent\":" + String(sent) + "}");
+}
+
 // ---------------- 配网页面 ----------------
 
 String ssidOptions() {
@@ -392,6 +445,7 @@ void begin(bool portal) {
     server.on("/api/config", HTTP_POST, handleConfig);
     server.on("/api/label", HTTP_POST, handleLabel);
     server.on("/api/control", HTTP_POST, handleControl);
+    server.on("/api/printer/cmd", HTTP_POST, handlePrinterCmd);
     server.on("/api/adddev", HTTP_POST, handleAddDevice);
     server.on("/api/deldev", HTTP_POST, handleDelDevice);
   }

@@ -154,6 +154,23 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 .pr .exts{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pr .tray.ext{border-style:dashed}
 .pr .tray.ext.feed{border-style:solid;border-color:#3d7a52;background:#17201a}
+/* 外挂的进料/退料按钮：真会动打印机，样式做小一点，别抢温度条的注意力 */
+.pr .tray.ext .cmds{display:flex;gap:6px;flex:none}
+.pr .tray.ext .cmds button{font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;
+  border:1px solid #2f3542;background:#1f232b;color:#c9cfdb}
+.pr .tray.ext .cmds button:hover:not(:disabled){background:#272d38;border-color:#3a4250}
+.pr .tray.ext .cmds button:disabled{opacity:.35;cursor:not-allowed}
+/* 控制区：单独一个 .sec，分隔线由 .sec + .sec 给，这里只管按钮行的横向排布
+   暂停/继续是中性色，停止不可撤销，单独给红色 */
+.pr .prctl{display:flex;align-items:center;gap:12px}
+.pr .prctl .hint{flex:1;font-size:12.5px;color:#8b93a1}
+.pr .prctl .pbtns{display:flex;gap:8px;flex:none}
+.pr .prctl button{font-size:13px;padding:7px 16px;border-radius:7px;cursor:pointer;
+  border:1px solid #2f3542;background:#1f232b;color:#c9cfdb}
+.pr .prctl button:hover:not(:disabled){background:#272d38;border-color:#3a4250}
+.pr .prctl button.danger{border-color:#5a2a2a;background:#2a1618;color:#f08b82}
+.pr .prctl button.danger:hover:not(:disabled){background:#351b1c;border-color:#6e3232}
+.pr .prctl button:disabled{opacity:.35;cursor:not-allowed}
 .pr .sw{width:34px;height:34px;border-radius:6px;flex:none;border:1px solid rgba(255,255,255,.14)}
 .pr .ti{flex:1;min-width:0}
 .pr .ti b{display:block;font-size:13.5px;font-weight:600;margin-bottom:3px}
@@ -167,6 +184,12 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
   .wrap{padding:12px 10px 30px}
   th,td{padding:8px 8px}
   .ops{flex-wrap:wrap}
+  /* 窄屏上 Ext 卡跟按钮挤在一格里会溢出，单独占一整行 */
+  .pr .exts{grid-template-columns:1fr}
+  /* 窄屏提示文字会占满整行，三个按钮换到下一行右对齐 */
+  .pr .prctl{flex-wrap:wrap;justify-content:flex-end}
+  .pr .prctl .hint{flex:1 1 100%}
+  .pr .prctl .pbtns{margin-left:auto}
 }
 </style>
 </head>
@@ -222,6 +245,17 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
       </div>
       <div class="trays" id="prTrays"></div>
       <div class="exts" id="prExt"></div>
+    </div>
+    <div class="sec">
+      <div class="lbl">控制</div>
+      <div class="prctl">
+        <span class="hint" id="prCtlHint">—</span>
+        <div class="pbtns">
+          <button id="prPause" disabled>暂停</button>
+          <button id="prResume" disabled>继续</button>
+          <button class="danger" id="prStop" disabled>停止打印</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -381,6 +415,22 @@ async function post(url, data) {
   }
 }
 
+// 打印机进退料：真会升温、真会送料，所以每次都要确认一次
+async function filamentCmd(c, label) {
+  const verb = c === 'load' ? '把外挂的料送进喷嘴' : '把喷嘴里的料退回外挂';
+  if (!confirm(label + '：会' + verb + '，喷嘴会加热到耗材温度，确定吗？')) return;
+  const j = await post('/api/printer/cmd', { c });
+  if (j.ok) toast('已下发「' + label + '」，看打印机反应');
+}
+
+// 暂停/继续是一键直达（点错了再点回去就行）；停止不可撤销，必须弹确认
+async function printCmd(c) {
+  const label = { pause: '暂停', resume: '继续', stop: '停止打印' }[c] || c;
+  if (c === 'stop' && !confirm('停止打印：当前任务会立刻中断，已打印的层无法续打，确定吗？')) return;
+  const j = await post('/api/printer/cmd', { c });
+  if (j.ok) toast('已下发「' + label + '」' + (c === 'stop' ? '，等打印机回到空闲' : ''));
+}
+
 // 同样的 POST，但错误交给调用方自己显示（弹窗里要逐字提示，不再弹 toast）
 async function postQuiet(url, data) {
   const body = new URLSearchParams(data).toString();
@@ -441,12 +491,18 @@ function renderPrinter(p) {
     txt('prAmsTitle', 'AMS'); txt('prAmsInfo', '—'); txt('prAmsNote2', '');
     el('prTrays').innerHTML = '';
     el('prExt').innerHTML = '';
+    el('prPause').disabled = true;
+    el('prResume').disabled = true;
+    el('prStop').disabled = true;
+    txt('prCtlHint', stale ? '桥接已断开，命令发不出去' : '等待 PC 端推送');
     return;
   }
 
   const st = p.st || '';
   const idle = st === 'IDLE' || !st;
   const tone = PR_TONE[st] || '';
+  // 停止打印：PREPARE（预热/调平）也算「有任务在跑」，这时候正是该拦下的时机
+  const stopping = st === 'RUNNING' || st === 'PAUSE' || st === 'PREPARE';
 
   el('prChip1').className = 'chip' + (idle ? '' : ' on ' + tone);
   el('prChip1').textContent = PR_ZH[st] || st || '—';
@@ -540,6 +596,20 @@ function renderPrinter(p) {
     return d;
   }
 
+  // 进料/退料按钮：挂在 Ext 卡右边
+  function filamentBtns(disabled) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cmds';
+    [['load', '进料'], ['unload', '退料']].forEach(([c, label]) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.disabled = disabled;
+      b.onclick = () => filamentCmd(c, label);
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
   const box = el('prTrays');
   box.innerHTML = '';
   for (let i = 0; i < 4; i++) {
@@ -559,9 +629,25 @@ function renderPrinter(p) {
                : (tn >= 0 && tn < 4)
                  ? '待用 · AMS 槽位 ' + (tn + 1) + (busy ? ' 正在供料' : ' 已装载')
                : '待用 · 当前未取料';
-  ebox.appendChild(trayCard(
+  const extCard = trayCard(
     'Ext · 外挂' + (ext && ext.type ? ' · ' + ext.type : ''),
-    ext, extSub, 'ext' + (ext && tn === 254 && busy ? ' feed' : '')));
+    ext, extSub, 'ext' + (ext && tn === 254 && busy ? ' feed' : ''));
+  // 没挂料就没必要给按钮；打印中 / 已断开时按钮置灰（C3 侧也会再拦一次）
+  if (ext) extCard.appendChild(filamentBtns(busy || p.age < 0 || p.age > 20));
+  ebox.appendChild(extCard);
+
+  // 控制区：三个动作的适用状态互不重叠，其余一律暗着并说明原因
+  //   暂停 → 只有 RUNNING；继续 → 只有 PAUSE；停止 → RUNNING/PAUSE/PREPARE
+  const canPause = st === 'RUNNING';
+  const canResume = st === 'PAUSE';
+  el('prPause').disabled = !canPause;
+  el('prResume').disabled = !canResume;
+  el('prStop').disabled = !stopping;
+  txt('prCtlHint', st === 'RUNNING' ? '打印中，可暂停或停止'
+    : st === 'PAUSE' ? '已暂停，可继续或停止'
+    : st === 'PREPARE' ? '正在预热/调平，只能停止'
+    : idle ? '当前没有正在进行的打印任务'
+    : '当前状态没有可执行的操作');
 }
 
 function render(j) {
@@ -634,6 +720,10 @@ async function tick() {
     setPill('mqttPill', 'mqttText', 'bad', '控制端没有响应');
   }
 }
+
+el('prPause').addEventListener('click', () => printCmd('pause'));
+el('prResume').addEventListener('click', () => printCmd('resume'));
+el('prStop').addEventListener('click', () => printCmd('stop'));
 
 el('saveBtn').addEventListener('click', async () => {
   el('saveBtn').disabled = true;

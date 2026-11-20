@@ -162,6 +162,7 @@ class PrinterLink:
         self._last_rx = 0.0
         self._last_tx = 0.0               # 最后一次往打印机发字节（判心跳用）
         self._version_req = 0.0
+        self._seq = 0                     # 下发命令的 sequence_id，0-9999 循环
 
     def open(self, timeout: float = 8.0) -> None:
         self.close()
@@ -190,6 +191,19 @@ class PrinterLink:
                          "version": 1, "push_target": 1}}).encode())
         self._last_push = time.monotonic()
         self._last_tx = self._last_push
+
+    def send_print(self, body: dict) -> None:
+        """往 device/{SN}/request 下发一条 print 命令（进料/退料用）。
+
+        MiniMqtt 只实现了 qos0，拓竹在忙着推状态时偶尔会漏收，所以网页那边
+        不承诺「已执行」，只承诺「已下发」，真实结果看 gcode_state / tray_now。
+        """
+        if not self.mq:
+            raise RuntimeError("打印机没连上")
+        self._seq = (self._seq + 1) % 10000
+        body.setdefault("print", {})["sequence_id"] = str(self._seq)
+        self.mq.publish(f"device/{self.sn}/request", json.dumps(body).encode(), qos=0)
+        self._last_tx = time.monotonic()
 
     def request_version(self) -> None:
         """问一次机型：info.get_version 的 module[].product_name = "Bambu Lab A1"。
@@ -353,6 +367,20 @@ class BrokerLink:
         self._last_ping = time.monotonic()
         print(f"[C3] 已连接 {self.host}:{self.port}")
 
+    def subscribe(self, topic: str) -> None:
+        assert self.mq
+        self.mq.subscribe(topic)
+        print(f"[C3] 已订阅 {topic}（下行命令）")
+
+    def poll(self, budget: float = 0.02) -> dict | None:
+        """取一条下行消息；没有就返回 None。"""
+        if not self.mq:
+            return None
+        try:
+            return self.mq.poll(time.monotonic() + budget)
+        except OSError:
+            return None
+
     def close(self) -> None:
         if self.mq:
             self.mq.close()
@@ -371,6 +399,61 @@ class BrokerLink:
             except OSError:
                 pass
             self._last_ping = time.monotonic()
+
+
+# ---------------------------------------------------------------------------
+# 下行命令：网页点「进料/退料」→ C3 发布 <topic>/cmd → 这里转给打印机
+# ---------------------------------------------------------------------------
+def filament_cmd(kind: str) -> dict:
+    """进退料都走 ams_change_filament（bambu-printer-manager 的实测写法）：
+    load   → slot_id / target = 254（外挂虚拟槽位），温度 -1 = 用耗材档案里的值
+    unload → slot_id / target = 255（不指定槽位，退掉当前那一路）
+    """
+    if kind == "load":
+        return {"print": {"command": "ams_change_filament", "ams_id": 0,
+                          "slot_id": 254, "target": 254,
+                          "curr_temp": -1, "tar_temp": -1, "soft_temp": 0}}
+    return {"print": {"command": "ams_change_filament", "ams_id": 0,
+                      "slot_id": 255, "target": 255}}
+
+
+PRINT_ACTS = ("pause", "resume", "stop")
+
+
+def print_cmd(kind: str) -> dict:
+    """暂停/继续/停止：拓竹的统一格式是 {print:{command,param}}。
+    和进退料的 ams_change_filament 是两套完全不同的命令，别混用。"""
+    return {"print": {"command": kind, "param": ""}}
+
+
+def run_print_cmd(msg: dict, link: PrinterLink) -> None:
+    """白名单执行一条下行命令。宁可什么都不做，也不把未知命令转给打印机。"""
+    try:
+        req = json.loads((msg.get("payload") or b"{}").decode("utf-8", "replace"))
+    except ValueError:
+        print("[cmd] 命令不是合法 JSON，丢掉")
+        return
+    kind = str(req.get("c") or "")
+    if kind not in ("load", "unload") + PRINT_ACTS:
+        print(f"[cmd] 不认识的动作 {kind!r}，丢掉")
+        return
+    st = str((link.state.get("print") or {}).get("gcode_state") or "")
+    printing = st in ("RUNNING", "PAUSE", "PREPARE")
+    # 每个动作只有唯一合法的状态窗口：暂停要打印中、继续要暂停中、停止要有任务
+    if kind in PRINT_ACTS:
+        if not ((kind == "pause" and st == "RUNNING")
+                or (kind == "resume" and st == "PAUSE")
+                or (kind == "stop" and printing)):
+            print(f"[cmd] 打印机当前 {st or '?'}，不能 {kind}，丢掉")
+            return
+        link.send_print(print_cmd(kind))
+        print(f"[cmd] 已下发 {kind}（打印机 {st}）")
+        return
+    if printing:
+        print(f"[cmd] 打印机正在 {st}，拒绝 {kind}")
+        return
+    link.send_print(filament_cmd(kind))
+    print(f"[cmd] 已下发 {kind}（打印机状态 {st or '?'}）")
 
 
 # ---------------------------------------------------------------------------
@@ -452,25 +535,44 @@ def main() -> int:
     ap.add_argument("--region", choices=["cn", "intl"], help="云端账号区域")
     ap.add_argument("--interval", type=float, default=5.0, help="发布间隔秒，默认 5")
     ap.add_argument("--once", action="store_true", help="发一条就退出")
+    ap.add_argument("--cmd", choices=["load", "unload", "pause", "resume", "stop"],
+                    help="只发一条命令就退出（调试用）：load/unload 进退料，pause/resume/stop 控制打印")
     ap.add_argument("--dry-run", action="store_true", help="只打印，不发给 C3")
     ap.add_argument("-v", "--verbose", action="store_true", help="打印每次发布的 JSON")
     args = ap.parse_args()
 
     # --broker 必须显式给出：C3 地址是环境相关的，藏在默认值里容易发到错的机器。
-    # 只有 --dry-run 豁免——那种模式压根不连 broker。
-    if not args.dry_run and not args.broker:
+    # 只有 --dry-run / --cmd 豁免——这两种都不需要 C3。
+    if not args.dry_run and not args.cmd and not args.broker:
         ap.error(f"必须显式指定 --broker（例如 --broker {BROKER_EXAMPLE}）")
 
     bh, _, bp = args.broker.partition(":")
     broker = None
-    if not args.dry_run:
+    if not args.dry_run and not args.cmd:
         try:
             broker = BrokerLink(bh, int(bp or 1883), args.user, args.password)
             broker.open()
+            broker.subscribe(args.topic + "/cmd")
         except (OSError, RuntimeError) as e:
             sys.exit(f"连不上 C3 broker {args.broker}：{e}")
 
     link = pick_source(args)
+
+    # 调试用：只发一条命令就退出，用来验证协议（不需要 C3）
+    if args.cmd:
+        body = (print_cmd(args.cmd) if args.cmd in PRINT_ACTS
+                else filament_cmd(args.cmd))
+        # dry-run 绝不能碰打印机：stop 是不可撤销的，误发就是废一个任务
+        if args.dry_run:
+            print(f"[dry-run] 只打印不发送：{json.dumps(body, ensure_ascii=False)}")
+        else:
+            link.send_print(body)
+            tip = {"load": "喷嘴会升温", "unload": "喷嘴会升温",
+                   "pause": "打印会立刻停在当前层", "resume": "从暂停的那一层接着打",
+                   "stop": "打印机会立刻中断当前任务"}[args.cmd]
+            print(f"[cmd] 已下发 {args.cmd}，去打印机上看反应（{tip}）")
+        link.close()
+        return 0
 
     # 顶栏身份：SN（证书 CN）、型号（get_version，云端可补）、来源。
     # 拿不到也不影响取数，只是顶栏少一段。
@@ -500,6 +602,15 @@ def main() -> int:
                     print(f"[!] 重连失败：{e2}")
                     backoff = min(backoff * 2, 30.0)
                 continue
+
+            # 下行命令：C3 网页点「进料/退料」→ semiams/printer/cmd
+            if broker:
+                msg = broker.poll(0.02)
+                if msg:
+                    try:
+                        run_print_cmd(msg, link)
+                    except (OSError, RuntimeError) as e:
+                        print(f"[cmd] 下发失败：{e}")
 
             p = link.state.get("print") or {}
             if not p.get("gcode_state"):
@@ -531,6 +642,7 @@ def main() -> int:
                         time.sleep(1)
                         try:
                             broker.open()
+                            broker.subscribe(args.topic + "/cmd")
                         except (OSError, RuntimeError) as e2:
                             # C3 掉线/重启时不要退出，下一轮还会再试
                             print(f"[!] C3 重连失败：{e2}")

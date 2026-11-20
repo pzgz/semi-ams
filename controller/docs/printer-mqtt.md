@@ -100,6 +100,62 @@ else if (endsWith(topic, "/printer"))      printerOnState(gPayload);   // ← �
 
 ---
 
+### 2.3 下行控制（C3 → PC 端）
+
+网页上「暂停 / 继续 / 停止打印 / 进料 / 退料」五个按钮走这一条路，和上报是完全对称的两条主题：
+
+| 方向 | 主题 | QoS | 载荷 |
+|---|---|---|---|
+| C3 发布 | `semiams/printer/cmd` | 0 | `{"c":"pause"}` / `"resume"` / `"stop"` / `"load"` / `"unload"` |
+| PC 端订阅 | 同上 | — | 白名单外一律丢弃 |
+
+C3 侧入口是 `POST /api/printer/cmd?c=...`（`webui.cpp` 的 `handlePrinterCmd`），
+做三层拦截：
+
+1. `c` 不在五个白名单词里 → 400；
+2. 桥接不在线（没收到过报文或 `age > 20s`）→ 409；
+3. **时机检查，每个动作只有一个合法的状态窗口**：
+
+| 动作 | 允许的 `gcode_state` | 其余状态 → 409 文案 |
+|---|---|---|
+| `pause` | 仅 `RUNNING` | 打印机当前是 X，只有打印中才能暂停 |
+| `resume` | 仅 `PAUSE` | 打印机当前是 X，只有暂停中才能继续 |
+| `stop` | `RUNNING` / `PAUSE` / `PREPARE` | 打印机没在打印（当前 X），不用停止 |
+| `load` / `unload` | 不能是上面三个（必须空闲） | 打印机正在 X，先停下再进退料 |
+
+注意 `pause` 和 `resume` 是**互斥且不重叠**的：`RUNNING` 时只能暂停、`PAUSE` 时只能继续，
+不存在「两个都能点」的状态。`PREPARE`（预热/调平）只允许 `stop`——那时还没真正开打，
+暂停没有意义。
+
+桥接收到后**再拦一次**（规则同上，以打印机自己报的 `gcode_state` 为准），
+然后转成拓竹的命令发到 `device/{SN}/request`：
+
+```json
+// 进料：254 = 外挂虚拟槽位，温度 -1 表示用耗材档案里的值
+{"print":{"command":"ams_change_filament","ams_id":0,"slot_id":254,"target":254,
+          "curr_temp":-1,"tar_temp":-1,"soft_temp":0}}
+// 退料：255 = 不指定槽位，退掉当前那一路
+{"print":{"command":"ams_change_filament","ams_id":0,"slot_id":255,"target":255}}
+// 暂停 / 继续 / 停止：三个共用一个形状，param 是空串但必须带这个键
+{"print":{"command":"pause","param":""}}
+{"print":{"command":"resume","param":""}}
+{"print":{"command":"stop","param":""}}
+```
+
+`pause` / `resume` / `stop` 和进退料是两套完全不同的命令，不共用 `ams_change_filament`。
+这三种命令在打印机侧是**同步生效**的（不像进退料要等加热），发出去 1–2 秒内
+`gcode_state` 就会变。
+
+**没有回执**：桥接只确认「已发布」，不校验打印机是否执行。真实结果看状态字段——
+进退料看喷嘴温度是否上升、`tray_now` 是否变成 `254`/`255`；暂停/继续看
+`gcode_state` 在 `RUNNING` ↔ `PAUSE` 之间翻转；停止看它回到 `FINISH`（个别固件是 `IDLE`）。
+这中间有 1–5 秒的窗口，网页按钮不做 loading，只提示「已下发」。
+
+主题必须以 `/cmd` 结尾（**不是** `/printer`），否则会被 C3 当成状态报文塞进
+`printerOnState()`。广播式的 `semiams/printer` 订阅不到它。
+
+---
+
 ## 3. 报文格式（PC 端 → C3）
 
 一条**扁平 JSON 对象**，无嵌套对象、无数组（`jsonmac` 只认扁平键）。典型 330–340 字节，
