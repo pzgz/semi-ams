@@ -150,6 +150,10 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 .pr .tray{display:flex;gap:12px;align-items:center;background:#191c22;border:1px solid #23262e;
           border-radius:8px;padding:12px 14px}
 .pr .tray.none{opacity:.42}
+/* 外挂料盘：跟上面四个槽位同一个 2 列栅格，宽度一致；虚线框区分「不走 AMS」 */
+.pr .exts{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pr .tray.ext{border-style:dashed}
+.pr .tray.ext.feed{border-style:solid;border-color:#3d7a52;background:#17201a}
 .pr .sw{width:34px;height:34px;border-radius:6px;flex:none;border:1px solid rgba(255,255,255,.14)}
 .pr .ti{flex:1;min-width:0}
 .pr .ti b{display:block;font-size:13.5px;font-weight:600;margin-bottom:3px}
@@ -217,6 +221,7 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
         <span class="dim" id="prAmsNote2"></span>
       </div>
       <div class="trays" id="prTrays"></div>
+      <div class="exts" id="prExt"></div>
     </div>
   </section>
 
@@ -435,6 +440,7 @@ function renderPrinter(p) {
     txt('prAmsNote', stale ? 'AMS 状态未知' : 'AMS 空闲');
     txt('prAmsTitle', 'AMS'); txt('prAmsInfo', '—'); txt('prAmsNote2', '');
     el('prTrays').innerHTML = '';
+    el('prExt').innerHTML = '';
     return;
   }
 
@@ -488,12 +494,14 @@ function renderPrinter(p) {
   setT('prChamber', 'prChamberBar', p.ch, 0, 60);  // 腔体没有目标值
 
   const trays = p.trays || [];
-  // AMS 状态：tray_now 255=空闲 / 254=外挂料盘 / 0-3=正在用哪槽
+  // tray_now 是「当前选中的料路」：255 未选 / 254 外挂 / 0-3 AMS 槽位。
+  // 空闲时它保留上次进料的那一路，所以还要看 gcode_state 才敢说「正在供料」
   const tn = (p.tn === undefined ? 255 : p.tn);
+  const busy = st === 'RUNNING' || st === 'PAUSE';
   let amsText;
   if (!trays.length) amsText = 'AMS 无料盘';
-  else if (tn === 254) amsText = '外挂料盘供料';
-  else if (tn >= 0 && tn < 4) amsText = 'AMS 使用中 · 槽位 ' + (tn + 1);
+  else if (tn === 254) amsText = busy ? '外挂料盘供料' : '外挂料盘待用';
+  else if (tn >= 0 && tn < 4) amsText = (busy ? 'AMS 使用中 · 槽位 ' : 'AMS 选中 · 槽位 ') + (tn + 1);
   else amsText = 'AMS 空闲';
   txt('prAmsNote', amsText);
 
@@ -504,23 +512,19 @@ function renderPrinter(p) {
   txt('prAmsInfo', info.join(' · '));
   txt('prAmsNote2', p.amsh >= 0 ? '（湿度为固件档位，非百分比）' : '');
 
-  const box = el('prTrays');
-  box.innerHTML = '';
-  for (let i = 0; i < 4; i++) {
-    const t = trays[i] || null;
+  // 料盘卡：色块 + 标题 + 副标题（+ 余量条）。AMS 槽位和外挂料盘共用这一份
+  function trayCard(title, t, sub, cls) {
     const d = document.createElement('div');
-    d.className = 'tray' + (t ? '' : ' none');
+    d.className = 'tray' + (t ? '' : ' none') + (cls ? ' ' + cls : '');
     const sw = document.createElement('div');
     sw.className = 'sw';
     sw.style.background = t && /^[0-9a-f]{6}$/i.test(t.color || '') ? '#' + t.color : '#2a2e37';
     const ti = document.createElement('div');
     ti.className = 'ti';
     const b = document.createElement('b');
-    b.textContent = t ? ('槽位 ' + (i + 1) + ' · ' + (t.type || '空')) : '槽位 ' + (i + 1);
+    b.textContent = title;
     const small = document.createElement('small');
-    if (!t) small.textContent = '空槽位';
-    else if (t.remain >= 0) small.textContent = '余量 ' + t.remain + '%';
-    else small.textContent = '余量未知（非 RFID 卷）';
+    small.textContent = sub;
     ti.appendChild(b);
     ti.appendChild(small);
     if (t && t.remain >= 0) {
@@ -533,8 +537,31 @@ function renderPrinter(p) {
     }
     d.appendChild(sw);
     d.appendChild(ti);
-    box.appendChild(d);
+    return d;
   }
+
+  const box = el('prTrays');
+  box.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const t = trays[i] || null;
+    const sub = !t ? '空槽位'
+              : (t.remain >= 0 ? '余量 ' + t.remain + '%' : '余量未知（非 RFID 卷）');
+    box.appendChild(trayCard('槽位 ' + (i + 1) + (t && t.type ? ' · ' + t.type : ''), t, sub));
+  }
+
+  // 外挂料盘（Ext）：机身料架直供，不走 AMS。没有 RFID，所以永远没有余量
+  const ext = p.vt || null;
+  const ebox = el('prExt');
+  ebox.innerHTML = '';
+  // tray_now 三态：254 外挂 / 0-3 AMS 某槽 / 255 未选。空闲时加「已装载」区分
+  const extSub = !ext ? '未挂料'
+               : tn === 254 ? (busy ? '正在从外挂供料' : '外挂已装载 · 待用')
+               : (tn >= 0 && tn < 4)
+                 ? '待用 · AMS 槽位 ' + (tn + 1) + (busy ? ' 正在供料' : ' 已装载')
+               : '待用 · 当前未取料';
+  ebox.appendChild(trayCard(
+    'Ext · 外挂' + (ext && ext.type ? ' · ' + ext.type : ''),
+    ext, extSub, 'ext' + (ext && tn === 254 && busy ? ' feed' : '')));
 }
 
 function render(j) {

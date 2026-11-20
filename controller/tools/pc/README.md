@@ -199,6 +199,7 @@ curl -s http://192.168.1.100/api/state | python3 -c "import sys,json;d=json.load
 | 主题发成 `semiams/print` | C3 靠 `endsWith("/printer")` 匹配 | 会被当成送料器报文丢进 `/state` 分支 |
 | 跑半小时崩 `Errno 54` | 没发 MQTT 心跳 | 已修：空闲 25s 补 `PINGREQ` |
 | 型号永远读不到 | `get_version` 应答形状记错 | `module` 直接挂在 `info` 下，没有嵌套 `get_version` 键 |
+| 界面永远显示「未取料」，AMS/外挂不区分 | `tray_now` 错读成 `ams.ams[0]["tray_now"]`，单元里没这个键 | 它在 `print.ams.tray_now`，与 `ams.ams` 数组同级；改完要重启桥接 |
 | 关掉「局域网模式」后连不上 | 访问码会重新生成 | 让 Bambu Studio 打开一次（配置会同步新码），或走云端 |
 | 短信登录 418 | 极验人机验证 | 用密码登录，或换邮箱账号 |
 

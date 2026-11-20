@@ -325,8 +325,7 @@ def compact(p: dict, ident: dict | None = None) -> dict:
         "aid": str((unit0 or {}).get("id") if unit0 else ""),
         "amsh": _i((unit0 or {}).get("humidity"), -1),
         "amst": _i(float((unit0 or {}).get("temp") or -1), -1) if (unit0 or {}).get("temp") else -1,
-        # tray_now：255 = 没在取料（AMS 空闲），254 = 用外挂料盘，0-3 = 正在用的槽位
-        "tn": _i((unit0 or {}).get("tray_now"), 255),
+        "tn": _i((p.get("ams") or {}).get("tray_now"), 255),
         "vt": ("{}:{}".format(str(vt.get("tray_type"))[:6],
                               str(vt.get("tray_color") or "")[:6].upper())
                if vt.get("tray_type") else ""),
