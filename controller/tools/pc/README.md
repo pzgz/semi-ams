@@ -126,6 +126,23 @@ python3 controller/tools/pc/bambu_bridge.py --source local --ip 192.168.1.50 --c
 python3 controller/tools/pc/bambu_bridge.py --source local --ip 192.168.1.50 --cmd stop --dry-run
 ```
 
+### 控制命令被拒：先开「开发者模式」
+
+打印机绑着云账号时，新固件会给每条 `print` 命令**验签名**，密钥在 Bambu Studio
+的私有网络插件里，第三方签不出来。表现是命令发出去了、网页没反应，拓竹 App 弹一条：
+
+> HMS_0500-0500-0001-0007: MQTT 命令校验失败，请更新 Studio 或 Handy
+
+桥接的日志里同时会出现一行「打印机拒了上一条命令」，网页顶栏显示
+「命令被拒 · 需开发者模式」，控制区顶上多一条黄色提示条，五个按钮（进退料 +
+暂停/继续/停止）全部置灰、悬停提示「需开发者模式」。只读的 `report` 不验签，
+所以监控一直是好的，失效的只有这五个动作。
+
+解法是在打印机上把**局域网模式**和**开发者模式**都打开（A 系列：设置 → 局域网模式
+→ 开发者模式；X / P 系列在 WLAN 页里），打开后固件就不再验签。代价是打印机脱离
+云端，拓竹 App 的远程控制用不了，同网段内 Studio / Handy / 本项目都仍能直连。
+详见 `controller/docs/printer-mqtt.md` §2.4。
+
 ### 访问码从哪来
 
 本地模式的码有两条来源，按顺序试：
@@ -237,6 +254,7 @@ curl -s http://192.168.1.100/api/state | python3 -c "import sys,json;d=json.load
 | 型号永远读不到 | `get_version` 应答形状记错 | `module` 直接挂在 `info` 下，没有嵌套 `get_version` 键 |
 | 界面永远显示「未取料」，AMS/外挂不区分 | `tray_now` 错读成 `ams.ams[0]["tray_now"]`，单元里没这个键 | 它在 `print.ams.tray_now`，与 `ams.ams` 数组同级；改完要重启桥接 |
 | 关掉「局域网模式」后连不上 | 访问码会重新生成 | 让 Bambu Studio 打开一次（配置会同步新码），或走云端 |
+| 拓竹 App 弹 `HMS_0500-0500-0001-0007`（MQTT 命令校验失败），网页点按钮没反应 | 固件给 `print` 命令验签名，第三方没有私钥 | 打印机上开「局域网模式 + 开发者模式」，见上文 |
 | 短信登录 418 | 极验人机验证 | 用密码登录，或换邮箱账号 |
 
 ---

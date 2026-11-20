@@ -171,6 +171,19 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 .pr .prctl button.danger{border-color:#5a2a2a;background:#2a1618;color:#f08b82}
 .pr .prctl button.danger:hover:not(:disabled){background:#351b1c;border-color:#6e3232}
 .pr .prctl button:disabled{opacity:.35;cursor:not-allowed}
+/* 固件给 print 命令验签名：绑着云账号又没开开发者模式时，第三方命令一律被拒。
+   按钮保留（能看出是"没权限"而不是"界面坏了"），但控制区顶上明写原因 */
+.pr .authbar{display:none;margin:0 0 10px;padding:8px 11px;border-radius:7px;
+  font-size:12.5px;line-height:1.6;color:#dcae6a;border:1px solid #4a3a1d;background:#221a0e}
+.pr .authbar.on{display:block}
+.pr .authbar b{color:#f0c27c;font-weight:600}
+/* 监听区：勾选项会真的动进料器电机，所以文案写全，状态存在设备里（NVS） */
+.pr .chk{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:#c9cfdb;
+  cursor:pointer;line-height:1.6}
+.pr .chk input{margin:2px 0 0;width:15px;height:15px;flex:none;cursor:pointer;accent-color:#3b6fd4}
+.pr .chk b{color:#e7e9ee;font-weight:600}
+.pr .chknote{margin:7px 0 0 24px;font-size:12.5px;color:#8b93a1;line-height:1.6}
+.pr .chknote:empty{display:none}
 .pr .sw{width:34px;height:34px;border-radius:6px;flex:none;border:1px solid rgba(255,255,255,.14)}
 .pr .ti{flex:1;min-width:0}
 .pr .ti b{display:block;font-size:13.5px;font-weight:600;margin-bottom:3px}
@@ -247,7 +260,19 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
       <div class="exts" id="prExt"></div>
     </div>
     <div class="sec">
+      <div class="lbl">监听</div>
+      <label class="chk">
+        <input type="checkbox" id="autoRetract">
+        <span>监听手动退料,ams自动反转退料</span>
+      </label>
+      <div class="chknote" id="autoRetractNote"></div>
+    </div>
+    <div class="sec">
       <div class="lbl">控制</div>
+      <div class="authbar" id="prAuthBar">
+        打印机拒收未签名命令（<b>HMS_0500-0500-0001-0007</b>）：需在打印机上开启
+        <b>「局域网模式 + 开发者模式」</b>后，下面的按钮才能下发。只读的状态监控不受影响。
+      </div>
       <div class="prctl">
         <span class="hint" id="prCtlHint">—</span>
         <div class="pbtns">
@@ -418,9 +443,12 @@ async function post(url, data) {
 // 打印机进退料：真会升温、真会送料，所以每次都要确认一次
 async function filamentCmd(c, label) {
   const verb = c === 'load' ? '把外挂的料送进喷嘴' : '把喷嘴里的料退回外挂';
-  if (!confirm(label + '：会' + verb + '，喷嘴会加热到耗材温度，确定吗？')) return;
+  // 外挂料盘的退料不是全自动：加热到温、退到工具头就停住等人工拉，
+  // 不拉的话挤出机霍尔传感器一直触发，打印机会认为「退料未完成」并挡住后续命令
+  const tail = c === 'unload' ? '\n\n加热到温后还要手动把料线从工具头拉出来，否则会卡住后续命令。' : '';
+  if (!confirm(label + '：会' + verb + '，喷嘴会加热到耗材温度，确定吗？' + tail)) return;
   const j = await post('/api/printer/cmd', { c });
-  if (j.ok) toast('已下发「' + label + '」，看打印机反应');
+  if (j.ok) toast(c === 'unload' ? '已下发「退料」，到温后手动拉出料线' : '已下发「' + label + '」，看打印机反应');
 }
 
 // 暂停/继续是一键直达（点错了再点回去就行）；停止不可撤销，必须弹确认
@@ -494,6 +522,7 @@ function renderPrinter(p) {
     el('prPause').disabled = true;
     el('prResume').disabled = true;
     el('prStop').disabled = true;
+    el('prAuthBar').classList.remove('on');
     txt('prCtlHint', stale ? '桥接已断开，命令发不出去' : '等待 PC 端推送');
     return;
   }
@@ -516,11 +545,22 @@ function renderPrinter(p) {
   txt('prSrcChip', srcName + ' · 在线');
   txt('prIdent', [p.md, p.sn].filter(Boolean).join(' · '));
 
+  // 0500-0500-0001-0007：固件在给 print 命令验签名。打印机绑着云账号又没开
+  // 开发者模式时，第三方发来的控制命令一律被拒。控制区要单独说清楚，
+  // 不然看着像按钮坏了（只读的状态上报不验签，监控还是正常的）
+  const authHms = p.h1 === '0500-0500-0001-0007';
+  // 07FF-2000-0002-0004：外挂料盘退料退到工具头就等人拉料，不拉就一直挂着，
+  // 打印机会挡住后续所有指令（这时 print_error 也会一起置位，所以它要优先于错误码显示）
+  const pullHms = p.h1 === '07FF-2000-0002-0004';
+
   const meta = [];
   if (p.age >= 0) meta.push('数据 ' + fmtAge(p.age));
   meta.push('累计 ' + p.reports + ' 条');
-  if (p.er) meta.push('错误码 ' + p.er);
-  else if (p.hn) meta.push('HMS ' + (p.h1 || p.hn + ' 条'));
+  if (authHms) meta.push('命令被拒 · 需开发者模式');
+  else if (pullHms) meta.push('等手动拉料 · 退料未完成');
+  else if (p.h1) meta.push('HMS ' + p.h1);
+  else if (p.er) meta.push('错误码 ' + p.er);
+  else if (p.hn) meta.push('HMS ' + p.hn + ' 条');
   txt('prMeta', meta.join(' · '));
 
   txt('prTitle', p.file || '（无任务）');
@@ -597,13 +637,14 @@ function renderPrinter(p) {
   }
 
   // 进料/退料按钮：挂在 Ext 卡右边
-  function filamentBtns(disabled) {
+  function filamentBtns(disabled, tip) {
     const wrap = document.createElement('div');
     wrap.className = 'cmds';
     [['load', '进料'], ['unload', '退料']].forEach(([c, label]) => {
       const b = document.createElement('button');
       b.textContent = label;
       b.disabled = disabled;
+      if (tip) b.title = tip;
       b.onclick = () => filamentCmd(c, label);
       wrap.appendChild(b);
     });
@@ -632,26 +673,78 @@ function renderPrinter(p) {
   const extCard = trayCard(
     'Ext · 外挂' + (ext && ext.type ? ' · ' + ext.type : ''),
     ext, extSub, 'ext' + (ext && tn === 254 && busy ? ' feed' : ''));
-  // 没挂料就没必要给按钮；打印中 / 已断开时按钮置灰（C3 侧也会再拦一次）
-  if (ext) extCard.appendChild(filamentBtns(busy || p.age < 0 || p.age > 20));
+  // 没挂料就没必要给按钮；打印中 / 已断开 / 等人工拉料 / 固件拒签时按钮置灰
+  // （C3 侧也会再拦一次，置灰只是别让人白点）
+  if (ext) extCard.appendChild(filamentBtns(
+    busy || p.age < 0 || p.age > 20 || pullHms || authHms,
+    authHms ? '需开发者模式' : ''));
   ebox.appendChild(extCard);
 
   // 控制区：三个动作的适用状态互不重叠，其余一律暗着并说明原因
   //   暂停 → 只有 RUNNING；继续 → 只有 PAUSE；停止 → RUNNING/PAUSE/PREPARE
+  // 固件在验签时按钮照常按状态算，但一律再置灰一层，并在控制区顶上明写原因
   const canPause = st === 'RUNNING';
   const canResume = st === 'PAUSE';
-  el('prPause').disabled = !canPause;
-  el('prResume').disabled = !canResume;
-  el('prStop').disabled = !stopping;
-  txt('prCtlHint', st === 'RUNNING' ? '打印中，可暂停或停止'
+  el('prPause').disabled = !canPause || authHms;
+  el('prResume').disabled = !canResume || authHms;
+  el('prStop').disabled = !stopping || authHms;
+  ['prPause', 'prResume', 'prStop'].forEach(i => { el(i).title = authHms ? '需开发者模式' : ''; });
+  el('prAuthBar').classList.toggle('on', authHms);
+  txt('prCtlHint', pullHms ? '退料未完成：请把料线从工具头拉出来'
+    : authHms ? '打印机拒收命令，按钮已置灰'
+    : st === 'RUNNING' ? '打印中，可暂停或停止'
     : st === 'PAUSE' ? '已暂停，可继续或停止'
     : st === 'PREPARE' ? '正在预热/调平，只能停止'
     : idle ? '当前没有正在进行的打印任务'
     : '当前状态没有可执行的操作');
 }
 
+// 外挂退料卡住时自动让进料器反转退料。
+//   触发条件：打印机上报 07FF-2000-0002-0004（料退到工具头、等人拽出来）
+//   动作对象：设备列表里「设备状态 = 打印中」且在线的那一台 → 走 /api/control retract
+// 每次「出现 → 消失」只发一次（autoArmed 上锁），否则 1 秒一次的轮询会连着发几十条。
+// 勾选状态存在控制端的 NVS 里（/api/autoret），所以刷新、换浏览器、断电重启都还在。
+let autoArmed = true;
+let autoPending = null;   // 正在提交的值：轮询回来的旧值不能把刚点的覆盖掉
+
+async function autoRetract(j) {
+  const p = j.printer || {};
+  const on = el('autoRetract').checked;
+  // 只认新鲜数据：桥接断了（age 变大）或数据无效时不动电机
+  const stuck = p.valid && p.age >= 0 && p.age <= 20 && p.h1 === '07FF-2000-0002-0004';
+
+  if (!stuck) {                       // 状态解除，下次再出现可以再来一次
+    autoArmed = true;
+    txt('autoRetractNote', on ? '待命中：等打印机报「退料到工具头」' : '');
+    return;
+  }
+  if (!on) {
+    txt('autoRetractNote', '检测手动退料卡住，但这一项没有勾选，不会动diy ams电机');
+    return;
+  }
+  if (!autoArmed) return;             // 这一轮已经发过了，等状态解除
+
+  const ds = j.devices || [];
+  const idx = ds.findIndex(d => d.online && d.mac && (d.key === 'PRINTING' || d.state === '打印中'));
+  if (idx < 0) {
+    txt('autoRetractNote', '检测到退料卡住，但设备列表里没有「打印中」的进料器，没发命令');
+    return;
+  }
+  const d = ds[idx];
+  autoArmed = false;                  // 先上锁再 await，防止两帧之间连发
+  const who = d.mac + (d.ip ? '（' + d.ip + '）' : '');
+  txt('autoRetractNote', '退料卡住，正在让「' + who + '」反转退料…');
+  const r = await post('/api/control', { mac: d.mac, idx: idx, cmd: 'retract' });
+  txt('autoRetractNote', r.ok
+    ? '已让「' + who + '」反转退料，现在去拽料线'
+    : '退料命令没发出去：' + (r.err || '控制端没有响应'));
+}
+
 function render(j) {
   last = j;
+  // 勾选状态以控制端为准（NVS 里存着）；正在提交的那一下以本地为准，
+  // 否则轮询回来的旧值会把刚点上的勾弹回去
+  if (autoPending === null) el('autoRetract').checked = !!j.autoret;
   if (firstLoad) {
     el('port').value = j.mqtt.port || 1883;
     el('user').value = j.mqtt.user || '';
@@ -667,6 +760,7 @@ function render(j) {
           j.wifi.ip ? ('本机 ' + j.wifi.ip + ' · ' + j.wifi.rssi + ' dBm') : 'WiFi 未连接');
   el('devHint').textContent = '共 ' + j.devices_used + ' 台 · 在线 ' + j.devices_online + ' 台';
   renderPrinter(j.printer);
+  autoRetract(j);
   syncRows(j.devices.length);
 
   j.devices.forEach((d, i) => {
@@ -720,6 +814,18 @@ async function tick() {
     setPill('mqttPill', 'mqttText', 'bad', '控制端没有响应');
   }
 }
+
+// 自动退料开关：点一下存一次，不跟下面那组「保存」走（互不覆盖）
+el('autoRetract').addEventListener('change', async () => {
+  const v = el('autoRetract').checked;
+  autoPending = v;
+  const r = await post('/api/autoret', { on: v ? 1 : 0 });
+  autoPending = null;
+  if (!r.ok) { el('autoRetract').checked = !v; return; }   // 没存上就把界面拨回去
+  autoArmed = true;                     // 刚打开，允许对当前这条 HMS 立刻动作一次
+  toast(v ? '自动退料已开启（存在控制端）' : '自动退料已关闭');
+  if (last) autoRetract(last);          // 现在就判一次，不用等下一轮轮询
+});
 
 el('prPause').addEventListener('click', () => printCmd('pause'));
 el('prResume').addEventListener('click', () => printCmd('resume'));
@@ -818,7 +924,7 @@ el('addMask').addEventListener('click', e => { if (e.target.id === 'addMask') cl
 }));
 
 tick();
-setInterval(tick, 1500);
+setInterval(tick, 3000);
 </script>
 </body>
 </html>

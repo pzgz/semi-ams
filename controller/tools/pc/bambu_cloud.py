@@ -164,10 +164,23 @@ class MiniMqtt:
     # ---------- 收包 ----------
     def _recv_exact(self, n: int) -> bytes:
         assert self.sock is not None
+        stall = 0
         while len(self._buf) < n:
-            chunk = self.sock.recv(4096)
+            try:
+                chunk = self.sock.recv(4096)
+            except socket.timeout:
+                # 一个包分几段到达时，中途超时不能当断线（pushall 那种 5KB 报文在
+                # poll 的 1 秒软超时下很容易被切开）。一个字节都没读到就交给上层，
+                # 读到一半就继续等，攒够 10 秒还收不齐才算真断。
+                if not self._buf:
+                    raise
+                stall += 1
+                if stall > 10:
+                    raise ConnectionError("报文读到一半超时")
+                continue
             if not chunk:
                 raise ConnectionError("连接被对端关闭")
+            stall = 0
             self._buf += chunk
         out, self._buf = self._buf[:n], self._buf[n:]
         return out

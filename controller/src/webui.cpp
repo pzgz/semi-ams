@@ -84,6 +84,11 @@ String stateJson() {
            FW_NAME, FW_VERSION, (unsigned)ESP.getFreeHeap(), (unsigned long)(millis() / 1000));
   s += buf;
 
+  // 监听区的自动退料开关（存 NVS，刷新页面/换浏览器都保持）
+  s += "\"autoret\":";
+  s += gSettings.autoRetract ? "true" : "false";
+  s += ",";
+
   s += "\"devices_used\":";
   s += devicesUsed();
   s += ",\"devices_online\":";
@@ -216,6 +221,18 @@ void handleConfig() {
   sendJson(200, "{\"ok\":true,\"running\":" + String(gBroker.running() ? "true" : "false") +
                     ",\"status\":\"" + esc(gBroker.status().c_str()) + "\",\"prefix\":\"" +
                     esc(gSettings.prefix) + "\",\"port\":" + String(gSettings.brokerPort) + "}");
+}
+
+void handleAutoRetract() {
+  const String on = server.arg("on");
+  // 只认 0/1：这是个会动进料器电机的开关，参数写歪了就该 400，不能猜
+  if (on != "0" && on != "1") {
+    sendErr(400, "on 只能是 0 或 1");
+    return;
+  }
+  settingsSetAutoRetract(on == "1");
+  Serial.printf("[网页] 自动退料：%s\n", gSettings.autoRetract ? "开" : "关");
+  sendJson(200, "{\"ok\":true,\"on\":" + String(gSettings.autoRetract ? "true" : "false") + "}");
 }
 
 void handleLabel() {
@@ -443,6 +460,7 @@ void begin(bool portal) {
     server.on("/", HTTP_GET, handleIndex);
     server.on("/api/state", HTTP_GET, []() { sendJson(200, stateJson()); });
     server.on("/api/config", HTTP_POST, handleConfig);
+    server.on("/api/autoret", HTTP_POST, handleAutoRetract);
     server.on("/api/label", HTTP_POST, handleLabel);
     server.on("/api/control", HTTP_POST, handleControl);
     server.on("/api/printer/cmd", HTTP_POST, handlePrinterCmd);

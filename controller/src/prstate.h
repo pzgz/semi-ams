@@ -42,7 +42,7 @@ struct PrinterState {
   int err;          // print_error
 
   int hmsCount;
-  char hms1[16];    // "0C00-0102"
+  char hms1[24];    // 四段式，如 "0500-0500-0001-0007"（19 字符 + 结尾 0）
 
   char amsId[4];    // AMS 单元号
   int amsHum;       // 湿度档位 1-5（固件给的是档位，不是百分比）；-1 = 不报

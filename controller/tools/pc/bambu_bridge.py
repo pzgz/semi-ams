@@ -51,6 +51,12 @@ MQTT_PORT = 8883
 BROKER_EXAMPLE = "192.168.1.100:1883"   # 仅作文案示例，不是默认值
 DEFAULT_TOPIC = "semiams/printer"   # 末尾 /printer 是 C3 侧认的钩子
 
+# HMS_0500-0500-0001-0007：打印机拒绝了一条没有签名的 MQTT 命令。
+# 打印机绑着云账号时，较新的固件会给每条 print 命令验签名（用的密钥在 Bambu
+# Studio 的私有网络插件里，第三方拿不到）；只有开了「仅局域网 + 开发者模式」
+# 才会无条件接受。只读的 report 不验签，所以监控一直是好的，只有控制会失败。
+AUTH_HMS = (0x05000500, 0x00010007)
+
 
 # ---------------------------------------------------------------------------
 # Bambu Studio 配置里的访问码
@@ -163,6 +169,7 @@ class PrinterLink:
         self._last_tx = 0.0               # 最后一次往打印机发字节（判心跳用）
         self._version_req = 0.0
         self._seq = 0                     # 下发命令的 sequence_id，0-9999 循环
+        self._hms_hint = 0.0              # 上次「命令被拒」告警的时间，防刷屏
 
     def open(self, timeout: float = 8.0) -> None:
         self.close()
@@ -234,6 +241,35 @@ class PrinterLink:
                 return True
         return False
 
+    def _scan_hms(self, delta: dict) -> None:
+        """盯一眼报文里新出现的 HMS，撞上「命令校验失败」就大声喊一次。
+
+        这是第三方控制最容易踩的坑：命令被固件拒了，桥接这边只看到「已发布」，
+        网页毫无反应，只有拓竹 App 弹一条 HMS。日志里说清楚，省得去猜是不是
+        报文格式写错了。
+
+        只看增量里的 hms（不是 self.state），否则这条 HMS 会一直留在合并后的
+        状态里，每 5 分钟重复告警一次。
+        """
+        hms = delta.get("hms")
+        if not isinstance(hms, list):
+            return
+        for h in hms:
+            if not isinstance(h, dict):
+                continue
+            if (_i(h.get("attr")), _i(h.get("code"))) != AUTH_HMS:
+                continue
+            if time.monotonic() - self._hms_hint > 300:
+                self._hms_hint = time.monotonic()
+                print("[!] 打印机拒了上一条命令：HMS_0500-0500-0001-0007"
+                      "（MQTT 命令校验失败）\n"
+                      "    固件会给 print 命令验签名，第三方签不出来。需要在打印机上开"
+                      "「局域网模式 + 开发者模式」\n"
+                      "    （设置 → 局域网模式 → 开发者模式），详见 "
+                      "controller/docs/printer-mqtt.md 的「控制命令被拒」一节。\n"
+                      "    只读的状态上报不走这条校验，所以监控不受影响。")
+            return
+
     def pump(self, budget: float) -> bool:
         """收预算时间内的报文并合并。返回是否拿到了新数据。
 
@@ -262,6 +298,7 @@ class PrinterLink:
                 continue
             if isinstance(data.get("print"), dict):
                 deep_update(self.state["print"], data["print"])
+                self._scan_hms(data["print"])
                 self._last_rx = time.monotonic()
                 got = True
         # 空闲 45 秒补一次全量，防止漏字段
@@ -314,7 +351,11 @@ def compact(p: dict, ident: dict | None = None) -> dict:
                 str(t.get("tray_type"))[:6],
                 str(t.get("tray_color") or "")[:6].upper(),
                 _i(t.get("remain"), -1)))
-    hms = [f"{_i(h.get('attr')):04X}-{_i(h.get('code')):04X}"
+    # HMS 官方写法是四段 16 位十六进制：attr 拆成前两段，code 拆成后两段，
+    # 例如 attr=0x05000500 / code=0x00010007 → "0500-0500-0001-0007"
+    hms = ["{:04X}-{:04X}-{:04X}-{:04X}".format(
+               _i(h.get("attr")) >> 16, _i(h.get("attr")) & 0xFFFF,
+               _i(h.get("code")) >> 16, _i(h.get("code")) & 0xFFFF)
            for h in (p.get("hms") or []) if isinstance(h, dict)]
     vt = p.get("vt_tray") or {}
     out = {
