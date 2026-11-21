@@ -94,6 +94,100 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 .form input[type=color]{width:56px;height:32px}
 .addfoot{display:flex;align-items:center;gap:12px;margin-top:16px}
 #addErr{color:#c0392b}
+/* ---- 打印机面板（深色）---- */
+.pr{background:#14161b;border:1px solid #23262e;border-radius:12px;color:#e7e9ee;
+    margin-bottom:16px;overflow:hidden}
+.pr .sec{padding:16px 18px}
+/* 顶栏：圆点 + 标题 + 连接方式 chip + 型号·SN */
+.pr .prhead{display:flex;align-items:center;gap:10px;padding:14px 18px;
+            border-bottom:1px solid #23262e}
+.pr .prhead b{font-size:15px;font-weight:600}
+.pr .pdot{width:8px;height:8px;border-radius:50%;background:#3a4050;flex:none
+          ;transition:background .3s}
+.pr .pdot.on{background:#2fbf5f}
+.pr .pdot.blue{background:#4c6ef5}
+.pr .pdot.warn{background:#e0a02a}
+.pr .pdot.bad{background:#d3524a}
+.pr .prident{margin-left:auto;font-size:12.5px;color:#7b8496;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .sec + .sec{border-top:1px solid #23262e}
+.pr .lbl{font-size:12.5px;color:#8b93a1;margin-bottom:10px}
+.pr .chips{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.pr .chip{font-size:13px;padding:5px 12px;border-radius:7px;background:#1c1f26;color:#7b8496;
+          border:1px solid #262a33}
+.pr .chip.on{background:#1b2444;color:#7ea6ff;border-color:#2a3a6b;font-weight:600}
+.pr .chip.on.ok{background:#16301f;color:#57d98a;border-color:#245036}
+.pr .chip.on.warn{background:#33280f;color:#e8b45e;border-color:#57431a}
+.pr .chip.on.bad{background:#33191a;color:#f08b82;border-color:#5a2a2a}
+.pr .prmeta{margin-left:auto;font-size:12px;color:#6f7787}
+.pr .title{font-size:19px;font-weight:600;line-height:1.35;margin:0 0 14px;
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .bar{height:22px;border-radius:5px;background:#22262e;position:relative;overflow:hidden}
+.pr .bar>i{display:block;height:100%;width:0;background:#2fbf5f;transition:width .3s}
+.pr .bar>i.warn{background:#e0a02a}
+.pr .bar>i.bad{background:#d3524a}
+.pr .bar>i.blue{background:#4c6ef5}
+.pr .bar>span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              font-size:12px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45)}
+.pr .stats{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px;
+           border:1px solid #23262e;border-radius:8px;overflow:hidden}
+.pr .stat{padding:12px 14px}
+.pr .stat + .stat{border-left:1px solid #23262e}
+.pr .stat .k{font-size:12px;color:#8b93a1;margin-bottom:4px}
+.pr .stat .v{font-size:22px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.pr .temps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.pr .t .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.pr .t .k{font-size:12.5px;color:#8b93a1}
+.pr .t .v{font-size:17px;font-weight:600}
+.pr .track{height:5px;border-radius:3px;background:#262a33;overflow:hidden}
+.pr .track>i{display:block;height:100%;width:0;background:#4c6ef5;transition:width .3s}
+.pr .track>i.hot{background:#e0704a}
+.pr .amsnote{text-align:center;font-size:12.5px;color:#8b93a1;margin-top:16px}
+.pr .amshd{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:12.5px;color:#8b93a1}
+.pr .amshd b{font-size:14px;color:#e7e9ee;font-weight:600}
+.pr .dim{color:#5f6675}
+.pr .trays{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pr .tray{display:flex;gap:12px;align-items:center;background:#191c22;border:1px solid #23262e;
+          border-radius:8px;padding:12px 14px}
+.pr .tray.none{opacity:.42}
+/* 外挂料盘：跟上面四个槽位同一个 2 列栅格，宽度一致；虚线框区分「不走 AMS」 */
+.pr .exts{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pr .tray.ext{border-style:dashed}
+.pr .tray.ext.feed{border-style:solid;border-color:#3d7a52;background:#17201a}
+/* 外挂的进料/退料按钮：真会动打印机，样式做小一点，别抢温度条的注意力 */
+.pr .tray.ext .cmds{display:flex;gap:6px;flex:none}
+.pr .tray.ext .cmds button{font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;
+  border:1px solid #2f3542;background:#1f232b;color:#c9cfdb}
+.pr .tray.ext .cmds button:hover:not(:disabled){background:#272d38;border-color:#3a4250}
+.pr .tray.ext .cmds button:disabled{opacity:.35;cursor:not-allowed}
+/* 控制区：单独一个 .sec，分隔线由 .sec + .sec 给，这里只管按钮行的横向排布
+   暂停/继续是中性色，停止不可撤销，单独给红色 */
+.pr .prctl{display:flex;align-items:center;gap:12px}
+.pr .prctl .hint{flex:1;font-size:12.5px;color:#8b93a1}
+.pr .prctl .pbtns{display:flex;gap:8px;flex:none}
+.pr .prctl button{font-size:13px;padding:7px 16px;border-radius:7px;cursor:pointer;
+  border:1px solid #2f3542;background:#1f232b;color:#c9cfdb}
+.pr .prctl button:hover:not(:disabled){background:#272d38;border-color:#3a4250}
+.pr .prctl button.danger{border-color:#5a2a2a;background:#2a1618;color:#f08b82}
+.pr .prctl button.danger:hover:not(:disabled){background:#351b1c;border-color:#6e3232}
+.pr .prctl button:disabled{opacity:.35;cursor:not-allowed}
+/* 固件给 print 命令验签名：绑着云账号又没开开发者模式时，第三方命令一律被拒。
+   按钮保留（能看出是"没权限"而不是"界面坏了"），但控制区顶上明写原因 */
+.pr .authbar{display:none;margin:0 0 10px;padding:8px 11px;border-radius:7px;
+  font-size:12.5px;line-height:1.6;color:#dcae6a;border:1px solid #4a3a1d;background:#221a0e}
+.pr .authbar.on{display:block}
+.pr .authbar b{color:#f0c27c;font-weight:600}
+/* 监听区：勾选项会真的动进料器电机，所以文案写全，状态存在设备里（NVS） */
+.pr .chk{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:#c9cfdb;
+  cursor:pointer;line-height:1.6}
+.pr .chk input{margin:2px 0 0;width:15px;height:15px;flex:none;cursor:pointer;accent-color:#3b6fd4}
+.pr .chk b{color:#e7e9ee;font-weight:600}
+.pr .chknote{margin:7px 0 0 24px;font-size:12.5px;color:#8b93a1;line-height:1.6}
+.pr .chknote:empty{display:none}
+.pr .sw{width:34px;height:34px;border-radius:6px;flex:none;border:1px solid rgba(255,255,255,.14)}
+.pr .ti{flex:1;min-width:0}
+.pr .ti b{display:block;font-size:13.5px;font-weight:600;margin-bottom:3px}
+.pr .ti small{display:block;font-size:12px;color:#8b93a1;margin-bottom:7px}
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
       background:#1f2329;color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;
       transition:all .22s;pointer-events:none;z-index:40;max-width:80vw}
@@ -103,6 +197,12 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
   .wrap{padding:12px 10px 30px}
   th,td{padding:8px 8px}
   .ops{flex-wrap:wrap}
+  /* 窄屏上 Ext 卡跟按钮挤在一格里会溢出，单独占一整行 */
+  .pr .exts{grid-template-columns:1fr}
+  /* 窄屏提示文字会占满整行，三个按钮换到下一行右对齐 */
+  .pr .prctl{flex-wrap:wrap;justify-content:flex-end}
+  .pr .prctl .hint{flex:1 1 100%}
+  .pr .prctl .pbtns{margin-left:auto}
 }
 </style>
 </head>
@@ -110,9 +210,79 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
 <div class="wrap">
   <header>
     <h1>SEMI-AMS 控制端</h1>
-    <small id="ver">v0.1</small>
+    <small id="ver">v0.2</small>
     <span class="pill" id="wifiPill"><i></i><span id="wifiText">--</span></span>
   </header>
+
+  <!-- 打印机面板：深色主面板 -->
+  <section class="pr">
+    <div class="prhead">
+      <i class="pdot" id="prDot"></i>
+      <b>拓竹打印监控</b>
+      <span class="chip" id="prSrcChip">未接入</span>
+      <span class="prident" id="prIdent"></span>
+    </div>
+    <div class="sec">
+      <div class="lbl">打印状态</div>
+      <div class="chips">
+        <span class="chip" id="prChip1">未接入</span>
+        <span class="chip" id="prChip2">空闲</span>
+        <span class="prmeta" id="prMeta"></span>
+      </div>
+      <div class="title" id="prTitle">等待 PC 端推送…</div>
+      <div class="bar" id="prBar"><i id="prBarFill"></i><span id="prBarText">--</span></div>
+      <div class="stats">
+        <div class="stat"><div class="k">进度</div><div class="v" id="prPct">--</div></div>
+        <div class="stat"><div class="k">层数</div><div class="v" id="prLayer">--</div></div>
+        <div class="stat"><div class="k">剩余时间</div><div class="v" id="prRemain">--</div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="lbl">温度</div>
+      <div class="temps">
+        <div class="t"><div class="row"><span class="k">喷嘴</span><span class="v" id="prNozzle">—</span></div>
+          <div class="track"><i id="prNozzleBar"></i></div></div>
+        <div class="t"><div class="row"><span class="k">热床</span><span class="v" id="prBed">—</span></div>
+          <div class="track"><i id="prBedBar"></i></div></div>
+        <div class="t"><div class="row"><span class="k">腔体</span><span class="v" id="prChamber">—</span></div>
+          <div class="track"><i id="prChamberBar"></i></div></div>
+      </div>
+      <div class="amsnote" id="prAmsNote">AMS 空闲</div>
+    </div>
+    <div class="sec">
+      <div class="lbl">AMS 料盘</div>
+      <div class="amshd">
+        <b id="prAmsTitle">AMS</b>
+        <span id="prAmsInfo">—</span>
+        <span class="dim" id="prAmsNote2"></span>
+      </div>
+      <div class="trays" id="prTrays"></div>
+      <div class="exts" id="prExt"></div>
+    </div>
+    <div class="sec">
+      <div class="lbl">监听</div>
+      <label class="chk">
+        <input type="checkbox" id="autoRetract">
+        <span>监听手动退料,ams自动反转退料</span>
+      </label>
+      <div class="chknote" id="autoRetractNote"></div>
+    </div>
+    <div class="sec">
+      <div class="lbl">控制</div>
+      <div class="authbar" id="prAuthBar">
+        打印机拒收未签名命令（<b>HMS_0500-0500-0001-0007</b>）：需在打印机上开启
+        <b>「局域网模式 + 开发者模式」</b>后，下面的按钮才能下发。只读的状态监控不受影响。
+      </div>
+      <div class="prctl">
+        <span class="hint" id="prCtlHint">—</span>
+        <div class="pbtns">
+          <button id="prPause" disabled>暂停</button>
+          <button id="prResume" disabled>继续</button>
+          <button class="danger" id="prStop" disabled>停止打印</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section class="card">
     <div class="cfg">
@@ -270,6 +440,25 @@ async function post(url, data) {
   }
 }
 
+// 打印机进退料：真会升温、真会送料，所以每次都要确认一次
+async function filamentCmd(c, label) {
+  const verb = c === 'load' ? '把外挂的料送进喷嘴' : '把喷嘴里的料退回外挂';
+  // 外挂料盘的退料不是全自动：加热到温、退到工具头就停住等人工拉，
+  // 不拉的话挤出机霍尔传感器一直触发，打印机会认为「退料未完成」并挡住后续命令
+  const tail = c === 'unload' ? '\n\n加热到温后还要手动把料线从工具头拉出来，否则会卡住后续命令。' : '';
+  if (!confirm(label + '：会' + verb + '，喷嘴会加热到耗材温度，确定吗？' + tail)) return;
+  const j = await post('/api/printer/cmd', { c });
+  if (j.ok) toast(c === 'unload' ? '已下发「退料」，到温后手动拉出料线' : '已下发「' + label + '」，看打印机反应');
+}
+
+// 暂停/继续是一键直达（点错了再点回去就行）；停止不可撤销，必须弹确认
+async function printCmd(c) {
+  const label = { pause: '暂停', resume: '继续', stop: '停止打印' }[c] || c;
+  if (c === 'stop' && !confirm('停止打印：当前任务会立刻中断，已打印的层无法续打，确定吗？')) return;
+  const j = await post('/api/printer/cmd', { c });
+  if (j.ok) toast('已下发「' + label + '」' + (c === 'stop' ? '，等打印机回到空闲' : ''));
+}
+
 // 同样的 POST，但错误交给调用方自己显示（弹窗里要逐字提示，不再弹 toast）
 async function postQuiet(url, data) {
   const body = new URLSearchParams(data).toString();
@@ -294,8 +483,268 @@ function fmtAge(s) {
 
 let last = null;
 
+// ---- 打印机面板：数据全部来自 PC 端桥接程序推的 MQTT 报文 ----
+const PR_ZH = {IDLE:'空闲', PREPARE:'准备中', SLICING:'切片中', RUNNING:'打印中',
+               PAUSE:'已暂停', FINISH:'已完成', FAILED:'已失败', OFFLINE:'离线'};
+const PR_TONE = {FINISH:'ok', RUNNING:'', PREPARE:'', SLICING:'', IDLE:'',
+                 PAUSE:'warn', FAILED:'bad', OFFLINE:'bad'};
+
+function txt(id, s) { el(id).textContent = s; }
+
+function renderPrinter(p) {
+  const bars = el('prBarFill');
+  // C3 侧不会自动清状态：桥接意外退出后 lastMs 就停在那一刻，age 一直涨。
+  // 超过 20 秒（≈4 个发布周期）就认为桥接已断开，清空实时数值，
+  // 只留机型/SN 和「最后一条数据是多少秒前」，免得僵死的「打印中 34%」冒充实时值。
+  const stale = !!p && p.valid && (p.age < 0 || p.age > 20);
+  if (!p || !p.valid || stale) {
+    el('prDot').className = 'pdot';
+    el('prSrcChip').className = 'chip' + (stale ? ' on warn' : '');
+    txt('prSrcChip', stale ? '已断开' : '未接入');
+    txt('prIdent', stale ? [p.md, p.sn].filter(Boolean).join(' · ') : '');
+    el('prChip1').className = 'chip' + (stale ? ' on warn' : '');
+    el('prChip1').textContent = stale ? '已断开' : '未接入';
+    el('prChip2').className = 'chip';
+    txt('prChip2', '—');
+    txt('prMeta', stale
+      ? '最后数据 ' + fmtAge(p.age) + ' · 累计 ' + p.reports + ' 条 · 检查 PC 端桥接'
+      : '等待 PC 端推送');
+    txt('prTitle', stale ? '桥接已断开' : '—');
+    bars.style.width = '0'; bars.className = '';
+    txt('prBarText', '--');
+    txt('prPct', '--'); txt('prLayer', '--'); txt('prRemain', '--');
+    txt('prNozzle', '—'); txt('prBed', '—'); txt('prChamber', '—');
+    ['prNozzleBar', 'prBedBar', 'prChamberBar'].forEach(i => { el(i).style.width = '0'; });
+    txt('prAmsNote', stale ? 'AMS 状态未知' : 'AMS 空闲');
+    txt('prAmsTitle', 'AMS'); txt('prAmsInfo', '—'); txt('prAmsNote2', '');
+    el('prTrays').innerHTML = '';
+    el('prExt').innerHTML = '';
+    el('prPause').disabled = true;
+    el('prResume').disabled = true;
+    el('prStop').disabled = true;
+    el('prAuthBar').classList.remove('on');
+    txt('prCtlHint', stale ? '桥接已断开，命令发不出去' : '等待 PC 端推送');
+    return;
+  }
+
+  const st = p.st || '';
+  const idle = st === 'IDLE' || !st;
+  const tone = PR_TONE[st] || '';
+  // 停止打印：PREPARE（预热/调平）也算「有任务在跑」，这时候正是该拦下的时机
+  const stopping = st === 'RUNNING' || st === 'PAUSE' || st === 'PREPARE';
+
+  el('prChip1').className = 'chip' + (idle ? '' : ' on ' + tone);
+  el('prChip1').textContent = PR_ZH[st] || st || '—';
+  el('prChip2').className = 'chip' + (idle ? ' on' : '');
+
+  // 顶栏：连接方式（本地/云端）+ 在线状态、型号 · SN（断开的情况上面已 return）
+  el('prDot').className = 'pdot ' + (st === 'FAILED' ? 'bad'
+                : st === 'PAUSE' ? 'warn' : st === 'RUNNING' ? 'blue' : 'on');
+  const srcName = p.src === 'cloud' ? '云端' : (p.src === 'local' ? '本地' : '未知');
+  el('prSrcChip').className = 'chip on ok';
+  txt('prSrcChip', srcName + ' · 在线');
+  txt('prIdent', [p.md, p.sn].filter(Boolean).join(' · '));
+
+  // 0500-0500-0001-0007：固件在给 print 命令验签名。打印机绑着云账号又没开
+  // 开发者模式时，第三方发来的控制命令一律被拒。控制区要单独说清楚，
+  // 不然看着像按钮坏了（只读的状态上报不验签，监控还是正常的）
+  const authHms = p.h1 === '0500-0500-0001-0007';
+  // 07FF-2000-0002-0004：外挂料盘退料退到工具头就等人拉料，不拉就一直挂着，
+  // 打印机会挡住后续所有指令（这时 print_error 也会一起置位，所以它要优先于错误码显示）
+  const pullHms = p.h1 === '07FF-2000-0002-0004';
+
+  const meta = [];
+  if (p.age >= 0) meta.push('数据 ' + fmtAge(p.age));
+  meta.push('累计 ' + p.reports + ' 条');
+  if (authHms) meta.push('命令被拒 · 需开发者模式');
+  else if (pullHms) meta.push('等手动拉料 · 退料未完成');
+  else if (p.h1) meta.push('HMS ' + p.h1);
+  else if (p.er) meta.push('错误码 ' + p.er);
+  else if (p.hn) meta.push('HMS ' + p.hn + ' 条');
+  txt('prMeta', meta.join(' · '));
+
+  txt('prTitle', p.file || '（无任务）');
+
+  const pct = Math.max(0, Math.min(100, p.pct || 0));
+  bars.style.width = pct + '%';
+  bars.className = st === 'FAILED' ? 'bad' : (st === 'PAUSE' ? 'warn'
+                  : (st === 'RUNNING' ? 'blue' : ''));
+  txt('prBarText', pct + '%');
+
+  txt('prPct', pct + '%');
+  txt('prLayer', p.tly ? p.ly + '/' + p.tly : '--');
+  txt('prRemain', (st === 'RUNNING' || st === 'PAUSE') && p.rem > 0
+                  ? (p.rem >= 60 ? Math.floor(p.rem / 60) + ' 时 ' + (p.rem % 60) + ' 分'
+                                 : p.rem + ' 分钟')
+                  : '--');
+
+  // 温度：优先按「当前 / 目标」；没目标（空闲）时退回固定量程，这样条形不会一直空着
+  const setT = (vId, bId, cur, tgt, max) => {
+    txt(vId, cur ? cur + '°C' : '—');
+    const span = tgt > 0 ? tgt : max;
+    el(bId).style.width = (cur && span ? Math.min(100, cur / span * 100) : 0) + '%';
+    el(bId).className = cur >= 200 ? 'hot' : '';
+  };
+  setT('prNozzle', 'prNozzleBar', p.nz, p.nzt, 300);
+  setT('prBed', 'prBedBar', p.bd, p.bdt, 120);
+  setT('prChamber', 'prChamberBar', p.ch, 0, 60);  // 腔体没有目标值
+
+  const trays = p.trays || [];
+  // tray_now 是「当前选中的料路」：255 未选 / 254 外挂 / 0-3 AMS 槽位。
+  // 空闲时它保留上次进料的那一路，所以还要看 gcode_state 才敢说「正在供料」
+  const tn = (p.tn === undefined ? 255 : p.tn);
+  const busy = st === 'RUNNING' || st === 'PAUSE';
+  let amsText;
+  if (!trays.length) amsText = 'AMS 无料盘';
+  else if (tn === 254) amsText = busy ? '外挂料盘供料' : '外挂料盘待用';
+  else if (tn >= 0 && tn < 4) amsText = (busy ? 'AMS 使用中 · 槽位 ' : 'AMS 选中 · 槽位 ') + (tn + 1);
+  else amsText = 'AMS 空闲';
+  txt('prAmsNote', amsText);
+
+  txt('prAmsTitle', 'AMS' + (p.amsid ? ' ' + (Number(p.amsid) + 1) : ''));
+  const info = [];
+  info.push('湿度档位 ' + (p.amsh >= 0 ? p.amsh : '—'));
+  info.push('温度 ' + (p.amst >= 0 ? p.amst + '°C' : '—'));
+  txt('prAmsInfo', info.join(' · '));
+  txt('prAmsNote2', p.amsh >= 0 ? '（湿度为固件档位，非百分比）' : '');
+
+  // 料盘卡：色块 + 标题 + 副标题（+ 余量条）。AMS 槽位和外挂料盘共用这一份
+  function trayCard(title, t, sub, cls) {
+    const d = document.createElement('div');
+    d.className = 'tray' + (t ? '' : ' none') + (cls ? ' ' + cls : '');
+    const sw = document.createElement('div');
+    sw.className = 'sw';
+    sw.style.background = t && /^[0-9a-f]{6}$/i.test(t.color || '') ? '#' + t.color : '#2a2e37';
+    const ti = document.createElement('div');
+    ti.className = 'ti';
+    const b = document.createElement('b');
+    b.textContent = title;
+    const small = document.createElement('small');
+    small.textContent = sub;
+    ti.appendChild(b);
+    ti.appendChild(small);
+    if (t && t.remain >= 0) {
+      const tr = document.createElement('div');
+      tr.className = 'track';
+      const fi = document.createElement('i');
+      fi.style.width = Math.min(100, t.remain) + '%';
+      tr.appendChild(fi);
+      ti.appendChild(tr);
+    }
+    d.appendChild(sw);
+    d.appendChild(ti);
+    return d;
+  }
+
+  // 进料/退料按钮：挂在 Ext 卡右边
+  function filamentBtns(disabled, tip) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cmds';
+    [['load', '进料'], ['unload', '退料']].forEach(([c, label]) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.disabled = disabled;
+      if (tip) b.title = tip;
+      b.onclick = () => filamentCmd(c, label);
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+
+  const box = el('prTrays');
+  box.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const t = trays[i] || null;
+    const sub = !t ? '空槽位'
+              : (t.remain >= 0 ? '余量 ' + t.remain + '%' : '余量未知（非 RFID 卷）');
+    box.appendChild(trayCard('槽位 ' + (i + 1) + (t && t.type ? ' · ' + t.type : ''), t, sub));
+  }
+
+  // 外挂料盘（Ext）：机身料架直供，不走 AMS。没有 RFID，所以永远没有余量
+  const ext = p.vt || null;
+  const ebox = el('prExt');
+  ebox.innerHTML = '';
+  // tray_now 三态：254 外挂 / 0-3 AMS 某槽 / 255 未选。空闲时加「已装载」区分
+  const extSub = !ext ? '未挂料'
+               : tn === 254 ? (busy ? '正在从外挂供料' : '外挂已装载 · 待用')
+               : (tn >= 0 && tn < 4)
+                 ? '待用 · AMS 槽位 ' + (tn + 1) + (busy ? ' 正在供料' : ' 已装载')
+               : '待用 · 当前未取料';
+  const extCard = trayCard(
+    'Ext · 外挂' + (ext && ext.type ? ' · ' + ext.type : ''),
+    ext, extSub, 'ext' + (ext && tn === 254 && busy ? ' feed' : ''));
+  // 没挂料就没必要给按钮；打印中 / 已断开 / 等人工拉料 / 固件拒签时按钮置灰
+  // （C3 侧也会再拦一次，置灰只是别让人白点）
+  if (ext) extCard.appendChild(filamentBtns(
+    busy || p.age < 0 || p.age > 20 || pullHms || authHms,
+    authHms ? '需开发者模式' : ''));
+  ebox.appendChild(extCard);
+
+  // 控制区：三个动作的适用状态互不重叠，其余一律暗着并说明原因
+  //   暂停 → 只有 RUNNING；继续 → 只有 PAUSE；停止 → RUNNING/PAUSE/PREPARE
+  // 固件在验签时按钮照常按状态算，但一律再置灰一层，并在控制区顶上明写原因
+  const canPause = st === 'RUNNING';
+  const canResume = st === 'PAUSE';
+  el('prPause').disabled = !canPause || authHms;
+  el('prResume').disabled = !canResume || authHms;
+  el('prStop').disabled = !stopping || authHms;
+  ['prPause', 'prResume', 'prStop'].forEach(i => { el(i).title = authHms ? '需开发者模式' : ''; });
+  el('prAuthBar').classList.toggle('on', authHms);
+  txt('prCtlHint', pullHms ? '退料未完成：请把料线从工具头拉出来'
+    : authHms ? '打印机拒收命令，按钮已置灰'
+    : st === 'RUNNING' ? '打印中，可暂停或停止'
+    : st === 'PAUSE' ? '已暂停，可继续或停止'
+    : st === 'PREPARE' ? '正在预热/调平，只能停止'
+    : idle ? '当前没有正在进行的打印任务'
+    : '当前状态没有可执行的操作');
+}
+
+// 外挂退料卡住时自动让进料器反转退料。
+//   触发条件：打印机上报 07FF-2000-0002-0004（料退到工具头、等人拽出来）
+//   动作对象：设备列表里「设备状态 = 打印中」且在线的那一台 → 走 /api/control retract
+// 每次「出现 → 消失」只发一次（autoArmed 上锁），否则 1 秒一次的轮询会连着发几十条。
+// 勾选状态存在控制端的 NVS 里（/api/autoret），所以刷新、换浏览器、断电重启都还在。
+let autoArmed = true;
+let autoPending = null;   // 正在提交的值：轮询回来的旧值不能把刚点的覆盖掉
+
+async function autoRetract(j) {
+  const p = j.printer || {};
+  const on = el('autoRetract').checked;
+  // 只认新鲜数据：桥接断了（age 变大）或数据无效时不动电机
+  const stuck = p.valid && p.age >= 0 && p.age <= 20 && p.h1 === '07FF-2000-0002-0004';
+
+  if (!stuck) {                       // 状态解除，下次再出现可以再来一次
+    autoArmed = true;
+    txt('autoRetractNote', on ? '待命中：等打印机报「退料到工具头」' : '');
+    return;
+  }
+  if (!on) {
+    txt('autoRetractNote', '检测手动退料卡住，但这一项没有勾选，不会动diy ams电机');
+    return;
+  }
+  if (!autoArmed) return;             // 这一轮已经发过了，等状态解除
+
+  const ds = j.devices || [];
+  const idx = ds.findIndex(d => d.online && d.mac && (d.key === 'PRINTING' || d.state === '打印中'));
+  if (idx < 0) {
+    txt('autoRetractNote', '检测到退料卡住，但设备列表里没有「打印中」的进料器，没发命令');
+    return;
+  }
+  const d = ds[idx];
+  autoArmed = false;                  // 先上锁再 await，防止两帧之间连发
+  const who = d.mac + (d.ip ? '（' + d.ip + '）' : '');
+  txt('autoRetractNote', '退料卡住，正在让「' + who + '」反转退料…');
+  const r = await post('/api/control', { mac: d.mac, idx: idx, cmd: 'retract' });
+  txt('autoRetractNote', r.ok
+    ? '已让「' + who + '」反转退料，现在去拽料线'
+    : '退料命令没发出去：' + (r.err || '控制端没有响应'));
+}
+
 function render(j) {
   last = j;
+  // 勾选状态以控制端为准（NVS 里存着）；正在提交的那一下以本地为准，
+  // 否则轮询回来的旧值会把刚点上的勾弹回去
+  if (autoPending === null) el('autoRetract').checked = !!j.autoret;
   if (firstLoad) {
     el('port').value = j.mqtt.port || 1883;
     el('user').value = j.mqtt.user || '';
@@ -310,6 +759,8 @@ function render(j) {
   setPill('wifiPill', 'wifiText', j.wifi.ip ? 'ok' : 'bad',
           j.wifi.ip ? ('本机 ' + j.wifi.ip + ' · ' + j.wifi.rssi + ' dBm') : 'WiFi 未连接');
   el('devHint').textContent = '共 ' + j.devices_used + ' 台 · 在线 ' + j.devices_online + ' 台';
+  renderPrinter(j.printer);
+  autoRetract(j);
   syncRows(j.devices.length);
 
   j.devices.forEach((d, i) => {
@@ -363,6 +814,22 @@ async function tick() {
     setPill('mqttPill', 'mqttText', 'bad', '控制端没有响应');
   }
 }
+
+// 自动退料开关：点一下存一次，不跟下面那组「保存」走（互不覆盖）
+el('autoRetract').addEventListener('change', async () => {
+  const v = el('autoRetract').checked;
+  autoPending = v;
+  const r = await post('/api/autoret', { on: v ? 1 : 0 });
+  autoPending = null;
+  if (!r.ok) { el('autoRetract').checked = !v; return; }   // 没存上就把界面拨回去
+  autoArmed = true;                     // 刚打开，允许对当前这条 HMS 立刻动作一次
+  toast(v ? '自动退料已开启（存在控制端）' : '自动退料已关闭');
+  if (last) autoRetract(last);          // 现在就判一次，不用等下一轮轮询
+});
+
+el('prPause').addEventListener('click', () => printCmd('pause'));
+el('prResume').addEventListener('click', () => printCmd('resume'));
+el('prStop').addEventListener('click', () => printCmd('stop'));
 
 el('saveBtn').addEventListener('click', async () => {
   el('saveBtn').disabled = true;
@@ -457,7 +924,7 @@ el('addMask').addEventListener('click', e => { if (e.target.id === 'addMask') cl
 }));
 
 tick();
-setInterval(tick, 1500);
+setInterval(tick, 3000);
 </script>
 </body>
 </html>

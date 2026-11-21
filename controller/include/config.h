@@ -2,7 +2,7 @@
 #pragma once
 
 #define FW_NAME    "SEMI-AMS-CTRL"
-#define FW_VERSION "0.2.7"
+#define FW_VERSION "0.3.1"   // 0.3.1：打印机状态改由 PC 端 MQTT 推过来（固件不再自己做 TLS）
 
 // ---------------- 网络 ----------------
 #define CTRL_AP_NAME   "SEMI-AMS-CTRL"  // 配网热点（没连上路由器时开）

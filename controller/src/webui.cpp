@@ -8,6 +8,7 @@
 #include "config.h"
 #include "devices.h"
 #include "jsonmac.h"
+#include "prstate.h"
 #include "settings.h"
 #include "webpage.h"
 
@@ -44,7 +45,7 @@ String selfIp() {
 
 String stateJson() {
   String s;
-  s.reserve(2800);
+  s.reserve(3400);
   char buf[128];
 
   s += "{\"ip\":\"";
@@ -83,6 +84,11 @@ String stateJson() {
            FW_NAME, FW_VERSION, (unsigned)ESP.getFreeHeap(), (unsigned long)(millis() / 1000));
   s += buf;
 
+  // 监听区的自动退料开关（存 NVS，刷新页面/换浏览器都保持）
+  s += "\"autoret\":";
+  s += gSettings.autoRetract ? "true" : "false";
+  s += ",";
+
   s += "\"devices_used\":";
   s += devicesUsed();
   s += ",\"devices_online\":";
@@ -119,7 +125,63 @@ String stateJson() {
     s += esc(d.material);
     s += "\"}";
   }
-  s += "]}";
+  s += "],";
+
+  // ---- 打印机（由 PC 端桥接程序 MQTT 推过来）----
+  PrinterState pr;
+  printerCopy(pr);
+  const uint32_t age = printerAge();
+  s += "\"printer\":{\"valid\":";
+  s += pr.valid ? "true" : "false";
+  // 这一段比 buf[128] 长，单独开个大缓冲，否则 snprintf 截断会把最后一个数值吃掉
+  char pbuf[192];
+  snprintf(pbuf, sizeof(pbuf),
+           ",\"age\":%ld,\"reports\":%lu,\"pct\":%d,\"ly\":%d,\"tly\":%d,\"rem\":%d,"
+           "\"nz\":%d,\"nzt\":%d,\"bd\":%d,\"bdt\":%d,\"ch\":%d,\"wf\":%d,\"spd\":%d,"
+           "\"er\":%d,\"hn\":%d",
+           age == 0xFFFFFFFFu ? -1L : (long)(age / 1000), (unsigned long)pr.reports, pr.pct,
+           pr.layer, pr.total, pr.remainMin, pr.nozzle, pr.nozzleTarget, pr.bed, pr.bedTarget,
+           pr.chamber, pr.wifi, pr.spd, pr.err, pr.hmsCount);
+  s += pbuf;
+  s += ",\"st\":\"";
+  s += esc(pr.st);
+  s += "\",\"md\":\"";
+  s += esc(pr.model);
+  s += "\",\"sn\":\"";
+  s += esc(pr.sn);
+  s += "\",\"src\":\"";
+  s += esc(pr.src);
+  s += "\",\"amsid\":\"";
+  s += esc(pr.amsId);
+  snprintf(buf, sizeof(buf), "\",\"amsh\":%d,\"amst\":%d,\"tn\":%d,\"h1\":\"",
+           pr.amsHum, pr.amsTemp, pr.trayNow);
+  s += buf;
+  s += esc(pr.hms1);
+  s += "\",\"file\":\"";
+  s += esc(pr.file);
+  s += "\",\"trays\":[";
+  for (int i = 0; i < pr.trayCount; ++i) {
+    if (i) s += ",";
+    s += "{\"type\":\"";
+    s += esc(pr.tray[i].type);
+    s += "\",\"color\":\"";
+    s += esc(pr.tray[i].color);
+    s += "\",\"remain\":";
+    s += pr.tray[i].remain;
+    s += "}";
+  }
+  s += "],\"vt\":";
+  if (pr.hasVt) {
+    s += "{\"type\":\"";
+    s += esc(pr.vtType);
+    s += "\",\"color\":\"";
+    s += esc(pr.vtColor);
+    s += "\"}";
+  } else {
+    s += "null";
+  }
+  s += "}";  // printer 结束
+  s += "}";  // 根对象结束
   return s;
 }
 
@@ -159,6 +221,18 @@ void handleConfig() {
   sendJson(200, "{\"ok\":true,\"running\":" + String(gBroker.running() ? "true" : "false") +
                     ",\"status\":\"" + esc(gBroker.status().c_str()) + "\",\"prefix\":\"" +
                     esc(gSettings.prefix) + "\",\"port\":" + String(gSettings.brokerPort) + "}");
+}
+
+void handleAutoRetract() {
+  const String on = server.arg("on");
+  // 只认 0/1：这是个会动进料器电机的开关，参数写歪了就该 400，不能猜
+  if (on != "0" && on != "1") {
+    sendErr(400, "on 只能是 0 或 1");
+    return;
+  }
+  settingsSetAutoRetract(on == "1");
+  Serial.printf("[网页] 自动退料：%s\n", gSettings.autoRetract ? "开" : "关");
+  sendJson(200, "{\"ok\":true,\"on\":" + String(gSettings.autoRetract ? "true" : "false") + "}");
 }
 
 void handleLabel() {
@@ -277,6 +351,59 @@ void handleControl() {
   sendJson(200, "{\"ok\":true,\"sent\":" + String(sent) + "}");
 }
 
+// 打印机进退料：网页按钮 → 本机 broker 发布 <prefix>printer/cmd → PC 桥接转给打印机。
+// C3 自己不碰 TLS，这条命令也只是个转发，真实动作在桥接那边做。
+void handlePrinterCmd() {
+  const String c = server.arg("c");
+  if (c != "load" && c != "unload" && c != "pause" && c != "resume" && c != "stop") {
+    sendErr(400, "不认识的动作");
+    return;
+  }
+  PrinterState p;
+  printerCopy(p);
+  // 桥接不在线就别假装发了：命令只会掉进空里
+  if (!p.valid || printerAge() > 20000) {
+    sendErr(409, "PC 桥接不在线，命令没有发出去");
+    return;
+  }
+  const String st(p.st);
+  const bool printing = (st == "RUNNING" || st == "PAUSE" || st == "PREPARE");
+  // 每个动作都有自己唯一合法的状态窗口，超出就是 409
+  if (c == "load" || c == "unload") {
+    if (printing) {
+      sendErr(409, "打印机正在" + st + "，先停下再进退料");
+      return;
+    }
+  } else if (c == "pause") {
+    if (st != "RUNNING") {
+      sendErr(409, "打印机当前是" + st + "，只有打印中才能暂停");
+      return;
+    }
+  } else if (c == "resume") {
+    if (st != "PAUSE") {
+      sendErr(409, "打印机当前是" + st + "，只有暂停中才能继续");
+      return;
+    }
+  } else if (!printing) {  // stop
+    sendErr(409, "打印机没在打印（当前 " + st + "），不用停止");
+    return;
+  }
+
+  char topic[MQTT_TOPIC_MAX];
+  snprintf(topic, sizeof(topic), "%sprinter/cmd", gSettings.prefix);
+  char payload[32];
+  snprintf(payload, sizeof(payload), "{\"c\":\"%s\"}", c.c_str());
+
+  String err;
+  int sent = 0;
+  if (!gBroker.publish(topic, payload, strlen(payload), false, err, &sent)) {
+    sendErr(503, err);
+    return;
+  }
+  Serial.printf("[网页] 打印机命令 %s 已下发（%d 台桥接）\n", c.c_str(), sent);
+  sendJson(200, "{\"ok\":true,\"sent\":" + String(sent) + "}");
+}
+
 // ---------------- 配网页面 ----------------
 
 String ssidOptions() {
@@ -333,8 +460,10 @@ void begin(bool portal) {
     server.on("/", HTTP_GET, handleIndex);
     server.on("/api/state", HTTP_GET, []() { sendJson(200, stateJson()); });
     server.on("/api/config", HTTP_POST, handleConfig);
+    server.on("/api/autoret", HTTP_POST, handleAutoRetract);
     server.on("/api/label", HTTP_POST, handleLabel);
     server.on("/api/control", HTTP_POST, handleControl);
+    server.on("/api/printer/cmd", HTTP_POST, handlePrinterCmd);
     server.on("/api/adddev", HTTP_POST, handleAddDevice);
     server.on("/api/deldev", HTTP_POST, handleDelDevice);
   }

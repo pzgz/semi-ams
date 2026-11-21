@@ -32,6 +32,7 @@ void settingsBegin() {
   String user = p.getString("user", "");
   String pass = p.getString("pass", "");
   String prefix = p.getString("prefix", kDefaultPrefix);
+  gSettings.autoRetract = p.getBool("autoret", false);
   p.end();
 
   strncpy(gSettings.user, user.c_str(), sizeof(gSettings.user) - 1);
@@ -51,6 +52,15 @@ void settingsSave() {
   p.putString("user", gSettings.user);
   p.putString("pass", gSettings.pass);
   p.putString("prefix", gSettings.prefix);
+  p.putBool("autoret", gSettings.autoRetract);
+  p.end();
+}
+
+void settingsSetAutoRetract(bool on) {
+  gSettings.autoRetract = on;
+  Preferences p;
+  p.begin("cfg", false);
+  p.putBool("autoret", on);
   p.end();
 }
 
